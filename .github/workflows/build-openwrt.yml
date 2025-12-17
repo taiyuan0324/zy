@@ -1,4 +1,4 @@
-name: Build Arthur Official
+name: Build Arthur Official (Fixed 22.04)
 
 on:
   workflow_dispatch:
@@ -9,15 +9,15 @@ on:
         default: 'true'
 
 env:
-  # 关键修改：换用 ImmortalWrt 官方仓库，23.05 分支
+  # 官方 ImmortalWrt 仓库，23.05 稳定版
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-23.05
   TZ: Asia/Shanghai
 
 jobs:
   build:
-    # 官方源码配合 Ubuntu 20.04 编译最稳
-    runs-on: ubuntu-20.04
+    # 修正：使用 Ubuntu 22.04 (20.04 已下架)
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout
@@ -29,8 +29,8 @@ jobs:
       run: |
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo -E apt-get -qq update
-        # 安装官方推荐的编译依赖
-        sudo -E apt-get -qq install $(curl -fsSL git.io/depends-ubuntu-2004)
+        # 针对 Ubuntu 22.04 的核心依赖修复
+        sudo -E apt-get -qq install build-essential gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-distutils zlib1g-dev libncurses5-dev
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
@@ -72,7 +72,7 @@ jobs:
       run: |
         cd openwrt
         echo -e "$(nproc) thread compile"
-        make -j$(nproc) FORCE=1 || make -j1 V=s FORCE=1
+        make -j$(nproc) || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Organize files
