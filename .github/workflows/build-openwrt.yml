@@ -1,4 +1,4 @@
-name: Build Arthur Official (Fixed 22.04)
+name: Build Arthur Official 22.04
 
 on:
   workflow_dispatch:
@@ -9,14 +9,15 @@ on:
         default: 'true'
 
 env:
-  # 官方 ImmortalWrt 仓库，23.05 稳定版
+  # 强制锁定：ImmortalWrt 官方仓库 23.05 分支
+  # 只有这里面才有 qualcommax！
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-23.05
   TZ: Asia/Shanghai
 
 jobs:
   build:
-    # 修正：使用 Ubuntu 22.04 (20.04 已下架)
+    # 修正：使用 Ubuntu 22.04 (不用排队，立刻开始)
     runs-on: ubuntu-22.04
 
     steps:
@@ -27,9 +28,9 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
+        # 清理空间并安装依赖 (针对 22.04 修正)
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo -E apt-get -qq update
-        # 针对 Ubuntu 22.04 的核心依赖修复
         sudo -E apt-get -qq install build-essential gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-distutils zlib1g-dev libncurses5-dev
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
@@ -40,7 +41,8 @@ jobs:
     - name: Clone source code
       working-directory: /workdir
       run: |
-        df -hT $PWD
+        # 这一步是关键！它会无视仓库里的 build.sh，直接拉取 ImmortalWrt
+        echo "Cloning ImmortalWrt 23.05..."
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
@@ -50,7 +52,7 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    # SSH 连接步骤
+    # SSH 连接
     - name: SSH connection to Actions
       uses: P3TERX/ssh2actions@v1.0.0
       if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh  != 'false') || contains(github.event.action, 'ssh')
@@ -64,8 +66,6 @@ jobs:
         cd openwrt
         make defconfig
         make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
 
     - name: Compile the firmware
       id: compile
@@ -88,5 +88,5 @@ jobs:
       uses: actions/upload-artifact@main
       if: steps.organize.outputs.status == 'success' && !cancelled()
       with:
-        name: OpenWrt_Arthur_Firmware
+        name: ImmortalWrt_Arthur_Firmware
         path: ${{ env.FIRMWARE }}
