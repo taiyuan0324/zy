@@ -1,0 +1,21 @@
+#!name = 汽水音乐秒过广告领VIP时长
+#!desc = 基于抓包定制：压缩30秒激励视频为1秒，放行并校准官方领时长链路，去除开屏广告
+#!author = custom
+#!icon = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Luna.png
+#!date = 2026-10-09
+
+[Rule]
+# 拦截无用数据统计与追踪上报
+DOMAIN, toblog.ctobsnssdk.com, REJECT
+DOMAIN, imp.voiceads.cn, REJECT
+DOMAIN, log.snssdk.com, REJECT
+
+[Script]
+# 激励视频下发与配置重写 (Response)
+http-response ^https?:\/\/.*(douyin|qishui)\.com\/luna\/advert\/(incentive|splash) script-path=qishui_vip.js, requires-body=true, tag=汽水时长压缩
+
+# 完播请求参数校准 (Request)
+http-request ^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done script-path=qishui_vip.js, requires-body=true, tag=汽水完播上报校准
+
+[Mitm]
+hostname = beta-luna.douyin.com, api.qishui.com, *.douyin.com, *.qishui.com
