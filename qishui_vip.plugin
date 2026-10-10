@@ -1,17 +1,69 @@
-#!name = 汽水音乐去广告与VIP领取保障
-#!desc = 修复违规拦截：移除请求体篡改保证100%领取成功，屏蔽开屏与信息流推广
+#!name = 通用开屏与移动广告拦截器
+#!desc = 聚合全网主流移动广告联盟SDK（字节穿山甲、腾讯广点通、百度移动、快手联盟、阿里Tanx、小米米盟等），拦截常见开屏、横幅与插屏广告
 #!author = custom
-#!icon = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Luna.png
+#!icon = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/AdBlock.png
+#!date = 2026-10-10
 
 [Rule]
-# 拦截无用统计和第三方广告追踪
-DOMAIN, toblog.ctobsnssdk.com, REJECT
-DOMAIN, imp.voiceads.cn, REJECT
-DOMAIN, log.snssdk.com, REJECT
+# === 1. 字节跳动 穿山甲广告联盟 (Pangle) ===
+DOMAIN-SUFFIX, pangolin-sdk-toutiao.com, REJECT-DROP
+DOMAIN-SUFFIX, pangolin-sdk-toutiao-b.com, REJECT-DROP
+DOMAIN-SUFFIX, pglstatp-toutiao.com, REJECT-DROP
+DOMAIN, toblog.ctobsnssdk.com, REJECT-DROP
+DOMAIN, mon.snssdk.com, REJECT-DROP
+DOMAIN, log.snssdk.com, REJECT-DROP
 
-[Script]
-# 仅对响应体进行广告清洗，绝不篡改客户端上报请求
-http-response ^https?:\/\/.*(douyin|qishui)\.com\/luna\/(advert\/splash|card|feed) script-path=qishui_vip.js, requires-body=true, tag=汽水广告净化
+# === 2. 腾讯 优量汇 / 广点通 (Tencent GDT) ===
+DOMAIN-SUFFIX, gdt.qq.com, REJECT-DROP
+DOMAIN-SUFFIX, l.qq.com, REJECT-DROP
+DOMAIN-SUFFIX, e.qq.com, REJECT-DROP
+DOMAIN, v.gdt.qq.com, REJECT-DROP
+DOMAIN, tmead.y.qq.com, REJECT-DROP
+DOMAIN, oth.eve.mdt.qq.com, REJECT-DROP
 
-[Mitm]
-hostname = beta-luna.douyin.com, api.qishui.com, *.douyin.com, *.qishui.com
+# === 3. 百度 移动广告联盟 (Baidu MobAds) ===
+DOMAIN-SUFFIX, mobads.baidu.com, REJECT-DROP
+DOMAIN-SUFFIX, mobads-logs.baidu.com, REJECT-DROP
+DOMAIN, wn.pos.baidu.com, REJECT-DROP
+DOMAIN, bgg.baidu.com, REJECT-DROP
+DOMAIN, als.baidu.com, REJECT-DROP
+
+# === 4. 快手 广告联盟 (Kwai Ad) ===
+DOMAIN-SUFFIX, adukwai.com, REJECT-DROP
+DOMAIN-SUFFIX, e.kuaishou.com, REJECT-DROP
+
+# === 5. 阿里巴巴 Tanx / 阿里妈妈 / 友盟 (Alibaba Ad) ===
+DOMAIN-SUFFIX, tanx.com, REJECT-DROP
+DOMAIN-SUFFIX, alimm.com, REJECT-DROP
+DOMAIN-SUFFIX, mmstat.com, REJECT-DROP
+DOMAIN-SUFFIX, ulogs.umeng.com, REJECT-DROP
+DOMAIN-SUFFIX, alipaylog.com, REJECT-DROP
+
+# === 6. 小米 移动广告联盟 (Mi Ad) ===
+DOMAIN-SUFFIX, ad.xiaomi.com, REJECT-DROP
+DOMAIN, adv.sec.miui.com, REJECT-DROP
+DOMAIN, o2o.api.xiaomi.com, REJECT-DROP
+DOMAIN, de.pandora.xiaomi.com, REJECT-DROP
+
+# === 7. 京东 / 微博 / 常见三方推送与广告平台 ===
+DOMAIN, dsp-x.jd.com, REJECT-DROP
+DOMAIN, xlog.jd.com, REJECT-DROP
+DOMAIN, beacon.sina.com.cn, REJECT-DROP
+DOMAIN, sax.sina.com.cn, REJECT-DROP
+DOMAIN, imp.voiceads.cn, REJECT-DROP
+
+# === 8. 海外主流移动广告联盟 ===
+DOMAIN-SUFFIX, googleads.g.doubleclick.net, REJECT-DROP
+DOMAIN-SUFFIX, pagead2.googlesyndication.com, REJECT-DROP
+DOMAIN-SUFFIX, unityads.unity3d.com, REJECT-DROP
+DOMAIN-SUFFIX, applovin.com, REJECT-DROP
+DOMAIN-SUFFIX, vungle.com, REJECT-DROP
+DOMAIN-SUFFIX, ironsrc.mobi, REJECT-DROP
+
+# === 9. 屏蔽主流 App 内置 HTTPDNS ===
+DOMAIN, httpdns.c.cdnhwc.com, REJECT-DROP
+DOMAIN, httpdns.n.netease.com, REJECT-DROP
+DOMAIN, httpdns.push.oppomobile.com, REJECT-DROP
+DOMAIN, dns.jd.com, REJECT-DROP
+# 如微信收发异常，请保持下方注释状态
+# DOMAIN, dns.weixin.qq.com, REJECT-DROP
