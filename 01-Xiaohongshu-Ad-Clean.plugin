@@ -1,0 +1,26 @@
+#!name = 小红书开屏与信息流净化
+#!desc = 清理小红书开屏配置、明确标记的推广内容和搜索广告接口。按小红书接口版本适配，更新后可能需要维护。
+#!author = IOS去广告工作区（规则适配参考 RuCu6 / Kelee）
+#!homepage = https://github.com/RuCu6/Loon
+#!date = 2026-10-11
+#!loon_version = 3.2.4
+#!tag = 去广告,小红书
+
+[Rule]
+# 将小红书 QUIC 流量切换到可供 MitM 处理的 HTTPS/TCP 通道
+AND,((PROTOCOL,QUIC),(DOMAIN-SUFFIX,xiaohongshu.com)),REJECT
+
+[Rewrite]
+# 屏蔽广告资源下发接口
+^https:\/\/www\.xiaohongshu\.com\/api\/sns\/v1\/ads\/resource(?:\?|$) reject-dict
+# 移除启动配置中的开屏图及 splash 项
+^https:\/\/edith\.xiaohongshu\.com\/api\/sns\/v1\/system_service\/config\? response-body-json-jq 'del(.data.loading_img, .data.splash)'
+# 清空开屏广告分组
+^https:\/\/edith\.xiaohongshu\.com\/api\/sns\/v2\/system_service\/splash_config(?:\?|$) response-body-json-jq '.data.ads_groups = []'
+# 首页信息流：仅移除服务端明确标记为广告的卡片，不过滤普通笔记/直播/商品笔记
+^https:\/\/(?:edith|rec)\.xiaohongshu\.com\/api\/sns\/v6\/homefeed\? response-body-json-jq 'if (.data | type) == "array" then .data |= map(select(has("ads_info") | not)) else . end'
+# 搜索结果：移除明确带 ads_info 的条目
+^https:\/\/edith\.xiaohongshu\.com\/api\/sns\/v10\/search\/notes\? response-body-json-jq 'if (.data.items | type) == "array" then .data.items |= map(select(has("ads_info") | not)) else . end'
+
+[MitM]
+hostname = edith.xiaohongshu.com, rec.xiaohongshu.com, www.xiaohongshu.com

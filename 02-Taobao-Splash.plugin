@@ -1,0 +1,24 @@
+#!name = 淘宝开屏广告净化
+#!desc = 拦截淘宝开屏广告域名和已识别的开屏图片请求。仅处理这些明确接口/素材规则。
+#!author = IOS去广告工作区（规则来源参考 树先生 / ishowshu）
+#!homepage = https://github.com/ishowshu/loon
+#!date = 2026-10-11
+#!loon_version = 3.2.4
+#!tag = 去广告,淘宝
+
+[Rule]
+USER-AGENT,"%E6%B7%98%E5%AE%9D*",REJECT
+DOMAIN,adashx.m.taobao.com,REJECT
+DOMAIN,h-adashx.ut.taobao.com,REJECT
+AND,((USER-AGENT,"%E6%B7%98%E5%AE%9D*"),(URL-REGEX,"^http:\/\/amdc\.m\.taobao\.com\/amdc\/mobileDispatch")),REJECT
+
+[Rewrite]
+# 开屏图片
+^https:\/\/heic\.alicdn\.com\/imgextra\/i\d\/[A-Za-z0-9_!]+-\d+-tps-\d+-\d+\.png_\d+x\d*q\d+\.jpg_\.heic$ reject-dict
+^https:\/\/heic\.alicdn\.com\/imgextra\/i\d\/[A-Za-z0-9_!]+-\d+-tps-\d+-\d+\.jpg_\d+x\d*q\d+\.jpg_\.heic$ reject-dict
+^https:\/\/heic\.alicdn\.com\/imgextra\/i\d+\/\d*\/?[\w!]+-\d-(octopus|tps-1125-1602|tps-1080-1920|tps-1125-1950)\.(jp|pn)g_(1\d{3}|9\d{2})x(1\d{3}|9\d{2})q[59]0 reject-dict
+# 百亿补贴开屏图。若出现正常图片加载异常，先停用此条或整个插件。
+^https?:\/\/gw\.alicdn\.com\/imgextra\/i\d+\/[^\/]+_!!\d+-\d+-tps-(720-1280|1080-1920|1125-1602|1242-2208)\.(jpg|png|jpeg)_[^\/]+\.webp reject-dict
+
+[MitM]
+hostname = heic.alicdn.com, gw.alicdn.com
