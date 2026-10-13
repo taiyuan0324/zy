@@ -1,0 +1,27 @@
+#!name = HTTPDNS 解析拦截（阿里向精简版）
+#!desc = 拦阿里/京东等 HTTPDNS 与 amdc 上报，强制这些 App 的域名解析回到 Loon DNS 框架，MitM 与域名规则才能生效。这是闲鱼/淘宝等阿里系 App 去广告的前置依赖。完整版见可莉插件库。
+#!author = 精编参考 可莉/VirgilClyne 的 HTTPDNS 拦截器
+#!homepage = https://github.com/Moli-X/Tool/blob/X/Loon/Plugin/Kelee/Block_HTTPDNS.plugin
+#!date = 2026-10-13
+#!loon_version = 3.2.4
+#!tag = 去广告,依赖
+
+[Rule]
+# 关键词兜底：多数 HTTPDNS 服务域名带该关键词
+DOMAIN-KEYWORD,httpdns,REJECT
+DOMAIN-KEYWORD,httpsdns,REJECT
+
+# 阿里系
+DOMAIN,httpdns.alicdn.com,REJECT
+DOMAIN,httpdns-api.aliyuncs.com,REJECT
+DOMAIN,httpdns-sc.aliyuncs.com,REJECT
+DOMAIN,amdc.alipay.com,REJECT
+DOMAIN,httpdns.danuoyi.tbcache.com,REJECT
+URL-REGEX,"^https?:\/\/amdc\.m\.taobao\.com\/amdc\/mobileDispatch",REJECT
+IP-CIDR,203.107.1.0/24,REJECT,no-resolve
+
+# 京东
+DOMAIN,dns.jd.com,REJECT
+
+# 直接把 IP 当 DNS 服务器的 HTTP 解析请求（阿里常用形态）
+URL-REGEX,"^http:\/\/((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\/v?[0-9]+)?\/(?:sign_)?(?:(?:d|ss)[46]?|resolve)\?",REJECT
