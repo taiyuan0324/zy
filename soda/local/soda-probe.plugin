@@ -1,0 +1,9 @@
+#!name=汽水 · 链路探针（零脚本·测完删）
+#!desc=不加载任何 JS，只用一条 REJECT 规则验证订阅是否被 Loon 加载；测完删除本插件
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Rule]
+DOMAIN,api.qishui.com,REJECT
+DOMAIN,beta-luna.douyin.com,REJECT

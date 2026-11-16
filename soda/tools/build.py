@@ -19,11 +19,15 @@ OUT = os.path.join(ROOT, "gh")
 OWNER = "taiyuan0324"
 REPO = "zy"
 BRANCH = "main"
-VER = "4"   # 改脚本后 +1，破 GitHub raw / CDN 缓存
+VER = "5"   # 改脚本后 +1，破 GitHub raw / CDN 缓存
 SUB = "soda"  # 落在 zy 的 soda/ 子目录
 
+# 关键：Loon 官方手册要求「GitHub 托管的插件/订阅 URL 必须以 http://raw 开头」。
+# https://raw... 会被 Loon 直接判为非法订阅而不加载（v2~v4 零反应的根因）。
+# 文件内容里的 script-path 不受此限制；jsDelivr 非 github 域名，也不受此限制。
 BASES = {
     "raw":      "https://raw.githubusercontent.com/%s/%s/%s/%s" % (OWNER, REPO, BRANCH, SUB),
+    "httpraw":  "http://raw.githubusercontent.com/%s/%s/%s/%s" % (OWNER, REPO, BRANCH, SUB),
     "jsdelivr": "https://cdn.jsdelivr.net/gh/%s/%s@%s/%s" % (OWNER, REPO, BRANCH, SUB),
 }
 
@@ -64,21 +68,39 @@ SENTINEL_MITM = ("*.qishui.com, *.douyin.com, *.douyinpic.com, *.snssdk.com, "
                  "beta-luna.douyin.com, conf.qishui.com")
 
 
-def meta(name, desc):
-    return [
+def meta(name, desc, minver=None):
+    lines = [
         "#!name=%s" % name,
         "#!desc=%s" % desc,
         "#!author=海鸥",
         "#!system=ios",
         "#!homepage=https://github.com/%s/%s" % (OWNER, REPO),
+    ]
+    if minver:
+        lines.append("#!loon_version=%s" % minver)
+    lines.append("")
+    return lines
+
+
+def render_probe_plugin():
+    """零脚本链路探针：只用 [Rule] REJECT，不下载 JS、不需要 MITM、不依赖通知权限。
+    导入后打开汽水音乐，Loon「最近请求」里 api.qishui.com 显示 REJECT
+    => 订阅确实被 Loon 加载；没显示 => 订阅 URL 格式/入口就是错的。"""
+    lines = meta("汽水 · 链路探针（零脚本·测完删）",
+                 "不加载任何 JS，只用一条 REJECT 规则验证订阅是否被 Loon 加载；测完删除本插件")
+    lines += [
+        "[Rule]",
+        "DOMAIN,api.qishui.com,REJECT",
+        "DOMAIN,beta-luna.douyin.com,REJECT",
         "",
     ]
+    return "\n".join(lines)
 
 
 def render_plugin_v2(base, js_rel, name, desc):
     """新语法：response if ${url} ~= /.../ then script(...) with ..."""
     path = (base + "/" + js_rel + "?v=" + VER) if base else js_rel
-    lines = meta(name, desc) + ["[Script]"]
+    lines = meta(name, desc, "3.5.1(983)") + ["[Script]"]
     for regex, tag in ROUTES_V2:
         lines.append(
             'response if ${url} ~= %s then script("%s") with tag="%s", timeout=30, requires_body=true, enable=true'
@@ -185,10 +207,19 @@ def main():
           render_plugin_legacy(BASES["raw"], "scripts/soda.js",
                                "汽水音乐 · 激励广告配置改写（旧语法）",
                                "Loon 3.5.1(982) 及以下用这条；旧版 Script 语法"))
+    # 保守备选：连 script-path 也用 http://raw（排除 Loon 对远程脚本 URL 的格式检查）
+    write("soda-noads-httpraw.plugin",
+          render_plugin_v2(BASES["httpraw"], "scripts/soda.js",
+                           "汽水音乐 · 激励广告配置改写（http-raw 通道）",
+                           "新语法；订阅 URL 与脚本 URL 均为 http://raw 前缀，排除格式检查问题"))
     write("soda-noads.conf",
           render_plugin_v2(BASES["raw"], "scripts/soda.js",
                            "汽水音乐 · 激励广告配置改写",
                            "订阅脚本入口用；内容与 soda-noads.plugin 一致（新语法）"))
+
+    # 2.5) 零脚本链路探针：判定「订阅有没有被 Loon 加载」这条最上游的链路
+    write("soda-probe.plugin", render_probe_plugin())
+    write("soda-probe-jsdelivr.plugin", render_probe_plugin())
 
     # 3) 链路哨兵（诊断用，独立插件）
     write("soda-sentinel.plugin", render_sentinel_v2(BASES["raw"]))
@@ -215,6 +246,7 @@ def main():
           render_plugin_legacy("", "scripts/soda.js", "汽水音乐 · 免广告领时长（离线·旧语法）",
                                "Loon 982 及以下用这条"))
     write("local/soda-sentinel.plugin", render_sentinel_v2(""))
+    write("local/soda-probe.plugin", render_probe_plugin())
     write("local/scripts/soda.js", render_js(DEFAULT))
     write("local/scripts/soda-replay.js", open(SRC_REPLAY, encoding="utf-8").read())
     write("local/scripts/sentinel.js", sentinel_src)

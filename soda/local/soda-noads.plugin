@@ -3,6 +3,7 @@
 #!author=海鸥
 #!system=ios
 #!homepage=https://github.com/taiyuan0324/zy
+#!loon_version=3.5.1(983)
 
 [Script]
 response if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/ads\/config/ then script("scripts/soda.js") with tag="汽水-广告总配置", timeout=30, requires_body=true, enable=true
