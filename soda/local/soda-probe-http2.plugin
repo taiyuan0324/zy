@@ -1,0 +1,14 @@
+#!name=Loon · HTTP 引擎探针 v2（国内可达·Safari 测）
+#!desc=三个纯 HTTP 域名全部 REJECT；关掉本插件后应全部恢复，以此判定 Loon 是否接管流量
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Rule]
+# 国内一定可达，关掉插件必能打开
+DOMAIN,www.qq.com,REJECT
+DOMAIN,qq.com,REJECT
+DOMAIN,www.163.com,REJECT
+# 海外对照（若本来就不通，说明网络问题而非 REJECT）
+DOMAIN,neverssl.com,REJECT
+DOMAIN,www.neverssl.com,REJECT

@@ -113,6 +113,25 @@ def render_probe_http():
     return "\n".join(lines)
 
 
+def render_probe_http2():
+    """国内可达的 HTTP 引擎探针：neverssl.com 在国内本身可能不通，会误判成 REJECT 生效。
+    换成本土一定可达的 HTTP 域名 + neverssl 对照，双证据。"""
+    lines = meta("Loon · HTTP 引擎探针 v2（国内可达·Safari 测）",
+                 "三个纯 HTTP 域名全部 REJECT；关掉本插件后应全部恢复，以此判定 Loon 是否接管流量")
+    lines += [
+        "[Rule]",
+        "# 国内一定可达，关掉插件必能打开",
+        "DOMAIN,www.qq.com,REJECT",
+        "DOMAIN,qq.com,REJECT",
+        "DOMAIN,www.163.com,REJECT",
+        "# 海外对照（若本来就不通，说明网络问题而非 REJECT）",
+        "DOMAIN,neverssl.com,REJECT",
+        "DOMAIN,www.neverssl.com,REJECT",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_force_tcp():
     """掐 QUIC/UDP443 + 放宽解密域名。只放 [Rule]/[MITM]（插件确定支持的段），
     [General] 参数另存 soda-diagnostic-general.txt 让用户粘进主配置，避免插件解析器忽略整段。"""
@@ -287,6 +306,7 @@ def main():
     write("soda-probe.plugin", render_probe_plugin())
     write("soda-probe-jsdelivr.plugin", render_probe_plugin())
     write("soda-probe-http.plugin", render_probe_http())
+    write("soda-probe-http2.plugin", render_probe_http2())
     write("soda-force-tcp.plugin", render_force_tcp())
     write("soda-diagnostic-general.txt", render_diagnostic_general())
 
@@ -317,6 +337,7 @@ def main():
     write("local/soda-sentinel.plugin", render_sentinel_v2(""))
     write("local/soda-probe.plugin", render_probe_plugin())
     write("local/soda-probe-http.plugin", render_probe_http())
+    write("local/soda-probe-http2.plugin", render_probe_http2())
     write("local/soda-force-tcp.plugin", render_force_tcp())
     write("local/soda-noads-mitm.plugin",
           render_plugin_v2("", "scripts/soda.js", "汽水音乐 · 免广告领时长（离线·[Mitm]）",
