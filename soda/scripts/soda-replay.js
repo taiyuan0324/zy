@@ -25,6 +25,17 @@
 
 (function () {
   var TAG = "[汽水·replay]";
+
+  // 无请求上下文（Loon 手动运行 / CRON 预执行）时直接退出，
+  // 否则下面的 $request.url / $done({response}) 会抛 ReferenceError。
+  if (typeof $request === "undefined" || typeof $response === "undefined") {
+    try {
+      console.log(TAG + " 无 HTTP 请求上下文（CRON / 手动运行）；本脚本需绑定 http-request 规则，已跳过");
+    } catch (e) {}
+    try { if (typeof $done === "function") $done({}); } catch (e) {}
+    return;
+  }
+
   var delay = 0;
   var arg = (typeof $argument !== "undefined" && $argument) ? $argument : "";
   arg.split("&").forEach(function (kv) {

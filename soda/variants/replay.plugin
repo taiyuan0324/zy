@@ -1,0 +1,11 @@
+#!name=汽水音乐 · done 重放（方案 C）
+#!desc=截获 done → 本地秒成功 → 原样重放；仅当服务端强校验 30s 时使用
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Script]
+request if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/soda-replay.js?v=2") with tag="汽水-done重放", timeout=30, requires_body=true, enable=true
+
+[MITM]
+hostname = api.qishui.com

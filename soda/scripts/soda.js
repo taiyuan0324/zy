@@ -30,6 +30,16 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"freq
   var TAG = "[汽水]";
   var STORE_CFG = "soda.cfg";
 
+  // Loon 在「脚本」页手动运行 / CRON 预执行时不注入 $request / $response，
+  // 顶层直接引用会抛 ReferenceError。此时安全跳过，绝不改动任何东西。
+  if (typeof $request === "undefined" || typeof $response === "undefined") {
+    try {
+      console.log(TAG + " 无 HTTP 请求上下文（CRON / 手动运行）；本脚本由 http-response 规则触发，已跳过");
+    } catch (e) {}
+    try { if (typeof $done === "function") $done({}); } catch (e) {}
+    return;
+  }
+
   function log(s) {
     if (C.verbose) console.log(TAG + " " + s);
   }
@@ -174,6 +184,9 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"freq
 
   /* ---------------- 3. /luna/advert/incentive/retrieve ---------------- */
   function handleRetrieve(url) {
+    // retrieve=0 且 video=0 时完全透传，不重写响应体
+    if (!C.retrieve && !C.video) return $done({});
+
     var j = safeParse($response.body);
     if (!j) return $done({});
 
@@ -182,7 +195,7 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"freq
     Object.keys(map).forEach(function (bucket) {
       var list = (map[bucket] && map[bucket].ad_infos) || [];
       list.forEach(function (ad) {
-        if (typeof ad.launch_duration === "number") {
+        if (C.retrieve && typeof ad.launch_duration === "number") {
           ad.launch_duration = C.duration;
           cnt++;
         }
