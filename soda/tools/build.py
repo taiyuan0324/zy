@@ -18,7 +18,7 @@ OUT = os.path.join(ROOT, "gh")
 OWNER = "taiyuan0324"
 REPO = "zy"
 BRANCH = "main"
-VER = "2"   # 改脚本后 +1，破 GitHub raw / CDN 缓存
+VER = "3"   # 改脚本后 +1，破 GitHub raw / CDN 缓存
 SUB = "soda"  # 落在 zy 的 soda/ 子目录
 
 BASES = {
@@ -27,12 +27,13 @@ BASES = {
 }
 
 DEFAULT = {
-    "duration": 1, "adsconfig": 1, "incentcfg": 1, "retrieve": 0,
-    "freq": 1000, "video": 0, "fake": 0, "verbose": 1
+    "duration": 1, "adsconfig": 1, "incentcfg": 1, "retrieve": 1, "alltime": 1,
+    "freq": 1000, "notify": 1, "probe": 1, "video": 0, "fake": 0, "verbose": 1
 }
 VARIANTS = {
-    "retrieve": ({"retrieve": 1, "incentcfg": 1}, "第二档：连 retrieve 的 launch_duration 一起压到 1s"),
     "d5":       ({"duration": 5},                 "保守档：倒计时压到 5s，降低服务端时钟校验风险"),
+    "quiet":    ({"notify": 0, "verbose": 0},    "静默档：关掉命中通知与日志，功能完全一致"),
+    "original": ({"retrieve": 0, "alltime": 0},  "对照档：恢复 v2 行为（只改 ads/config + incentcfg）"),
     "fake":     ({"fake": 1, "verbose": 1},      "调试档：done 失败时本地伪成功（仅 UI，无真实权益）"),
 }
 
@@ -76,12 +77,17 @@ def render_plugin_v2(base, js_rel, name, desc):
             'response if ${url} ~= %s then script("%s") with tag="%s", timeout=30, requires_body=true, enable=true'
             % (regex, path, tag)
         )
+    # request 阶段只观测不改：确认 App 实际上报的 launch_duration
+    lines.append(
+        'request if ${url} ~= %s then script("%s") with tag="汽水-领奖请求观测", timeout=30, requires_body=true, enable=true'
+        % (REPLAY_V2, path)
+    )
     lines += ["", "[MITM]", "hostname = api.qishui.com, beta-luna.douyin.com", ""]
     return "\n".join(lines)
 
 
 def render_plugin_legacy(base, js_rel, name, desc):
-    """旧语法：http-response <regex> script-path=...（不含 max-size 也兼容）"""
+    """旧语法：http-response <regex> script-path=..."""
     path = (base + "/" + js_rel + "?v=" + VER) if base else js_rel
     lines = meta(name, desc) + ["[Script]"]
     for pattern, tag in ROUTES_LEGACY:
@@ -89,6 +95,10 @@ def render_plugin_legacy(base, js_rel, name, desc):
             "http-response %s script-path=%s,requires-body=true,max-size=10485760,timeout=30,tag=%s,enable=true"
             % (pattern, path, tag)
         )
+    lines.append(
+        "http-request ^https?:\\/\\/api\\.qishui\\.com\\/luna\\/advert\\/incentive\\/done script-path=%s,requires-body=true,timeout=30,tag=汽水-领奖请求观测,enable=true"
+        % path
+    )
     lines += ["", "[MITM]", "hostname = api.qishui.com, beta-luna.douyin.com", ""]
     return "\n".join(lines)
 

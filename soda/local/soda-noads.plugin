@@ -10,6 +10,7 @@ response if ${url} ~= /^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incenti
 response if ${url} ~= /^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/retrieve/ then script("scripts/soda.js") with tag="汽水-广告素材", timeout=30, requires_body=true, enable=true
 response if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/ then script("scripts/soda.js") with tag="汽水-领奖回调", timeout=30, requires_body=true, enable=true
 response if ${url} ~= /^https?:\/\/beta-luna\.douyin\.com\/{1,2}luna\/advert\/fallback\/done\/info/ then script("scripts/soda.js") with tag="汽水-兜底token", timeout=30, requires_body=true, enable=true
+request if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/ then script("scripts/soda.js") with tag="汽水-领奖请求观测", timeout=30, requires_body=true, enable=true
 
 [MITM]
 hostname = api.qishui.com, beta-luna.douyin.com
