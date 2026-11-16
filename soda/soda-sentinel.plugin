@@ -5,8 +5,8 @@
 #!homepage=https://github.com/taiyuan0324/zy
 
 [Script]
-response if ${url} ~= /(qishui|luna|douyin|bytedance|snssdk|bytegecko)/i then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/sentinel.js?v=5") with tag="汽水-哨兵-RESP", timeout=30, requires_body=true, enable=true
-request if ${url} ~= /(qishui|luna|douyin|bytedance|snssdk|bytegecko)/i then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/sentinel.js?v=5") with tag="汽水-哨兵-REQ", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /(qishui|luna|douyin|bytedance|snssdk|bytegecko)/i then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/sentinel.js?v=6") with tag="汽水-哨兵-RESP", timeout=30, requires_body=true, enable=true
+request if ${url} ~= /(qishui|luna|douyin|bytedance|snssdk|bytegecko)/i then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/sentinel.js?v=6") with tag="汽水-哨兵-REQ", timeout=30, requires_body=true, enable=true
 
 [MITM]
 hostname = *.qishui.com, *.douyin.com, *.douyinpic.com, *.snssdk.com, *.bytedance.net, *.bytegecko.com, api.qishui.com, beta-luna.douyin.com, conf.qishui.com

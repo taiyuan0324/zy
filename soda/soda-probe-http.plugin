@@ -1,0 +1,9 @@
+#!name=Loon · HTTP 引擎探针（Safari 测·零依赖）
+#!desc=不加载 JS、不需要 MITM/CA、不需要汽水；Safari 打开 http://neverssl.com 应看不到页面
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Rule]
+DOMAIN,neverssl.com,REJECT
+DOMAIN,www.neverssl.com,REJECT

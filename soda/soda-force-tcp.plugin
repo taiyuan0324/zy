@@ -1,0 +1,12 @@
+#!name=汽水 · 强制 TCP 回落（防 QUIC 绕过）
+#!desc=掐 UDP443/QUIC 逼 App 回落 TCP 让 MITM 解密；诊断期用，会影响其它 App 的 QUIC
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Rule]
+# 3.5.1+ 可直接用：PROTOCOL,QUIC,REJECT（若报规则无效就删掉此注释下方两行之一）
+AND,((PROTOCOL,UDP),(DEST-PORT,443)),REJECT
+
+[MITM]
+hostname = *.qishui.com, *.douyin.com, *.douyinpic.com, *.snssdk.com, *.bytedance.net, *.bytegecko.com, api.qishui.com, beta-luna.douyin.com, conf.qishui.com

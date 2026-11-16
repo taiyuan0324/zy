@@ -1,0 +1,11 @@
+# 汽水诊断参数 —— 粘到 Loon【主配置】的 [General] 段，用完删掉
+# 1) App 用 HTTPDNS / 硬编码 IP 时靠 TLS SNI 反查域名，让 DOMAIN 规则能匹配
+#    3.5.0(968)+ 已自动探测，旧版才需显式写；写了无害
+sni-sniffing = true
+# 2) 域名拒绝放到转发阶段执行，绕开自建 DNS（默认 DNS 阶段会被 HTTPDNS 绕过）
+domain-reject-mode = Request
+# 3) 掐 QUIC(UDP 443)，逼 App 回落 TCP，MITM 才能解密
+#    与 soda-force-tcp.plugin 的 AND 规则二选一即可，不必重复
+disable-udp-ports = 443
+udp-fallback-mode = REJECT
+disable-stun = true

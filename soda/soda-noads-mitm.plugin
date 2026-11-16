@@ -1,0 +1,17 @@
+#!name=汽水音乐 · 激励广告配置改写（[Mitm] 段名）
+#!desc=若 [MITM] 段在新版被忽略导致不解密，换这条；新语法不变
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+#!loon_version=3.5.1(983)
+
+[Script]
+response if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/ads\/config/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/soda.js?v=6") with tag="汽水-广告总配置", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/config/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/soda.js?v=6") with tag="汽水-激励配置", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/retrieve/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/soda.js?v=6") with tag="汽水-广告素材", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/soda.js?v=6") with tag="汽水-领奖回调", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /^https?:\/\/beta-luna\.douyin\.com\/{1,2}luna\/advert\/fallback\/done\/info/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/soda.js?v=6") with tag="汽水-兜底token", timeout=30, requires_body=true, enable=true
+request if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/soda.js?v=6") with tag="汽水-领奖请求观测", timeout=30, requires_body=true, enable=true
+
+[Mitm]
+hostname = api.qishui.com, beta-luna.douyin.com

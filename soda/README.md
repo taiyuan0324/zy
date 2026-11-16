@@ -1,8 +1,55 @@
-# 汽水音乐 · 激励广告配置改写（Loon 订阅）· v5
+# 汽水音乐 · 激励广告配置改写（Loon 订阅）· v6
 
 仓库：`taiyuan0324/zy`，本目录 `soda/`。
 
 只改写服务端**响应**里的倒计时字段，让 App 自己走完流程并发出**它自己签名**的领奖请求；请求体一个字节都不碰（请求带 `x-ss-stub`=md5(body)、`x-gorgon`、`x-helios`、`x-medusa`、`bd-ticket-guard` 多重签名，改了必被拒）。
+
+---
+
+## -1. v6：「是不是 https 导致的」——分层回答
+
+先给结论：**规则层不是，解密层和传输层可能是。**
+
+抓包复核证据：原抓包 123 个请求全部是 `:scheme: https`，**0 条 CONNECT 隧道**、`:path` 全是明文可见、响应头无 `alt-svc` / `h3` 通告。也就是说当时 Loon **对 HTTPS 完整解密过**，且 App 走的是 HTTP/2 over TCP，不是 QUIC。
+
+| 层 | 是否吃 https | 说明 |
+|---|---|---|
+| ① 规则匹配 | **不吃** | 正则写的是 `^https?:\/\/`，`http` 和 `https` 都匹配；`[Rule] DOMAIN,...,REJECT` 在连接层，连 TLS 握手都没开始 |
+| ② MITM 解密 | **吃** | `response` 脚本必须解密后才跑。CA 已安装并信任 ≠ Loon「HTTPS 解密」开关已开 ≠ 域名在 MITM hostname 列表里。没解密时 Loon 只看到 CONNECT 隧道，脚本永远不触发 |
+| ③ 传输通道 | **吃** | QUIC / HTTP3 走 UDP 443，绕过 TCP MITM；字节系 App 常用 HTTPDNS + 硬编码 IP，绕过 Loon 的 DNS 阶段域名规则。**这两条会让「连 `[Rule]` REJECT 探针都不触发」** |
+
+所以「探针不能触发」最可能是 ③：App 没走 Loon 能看见的域名/TCP 通道，而不是 https 本身。
+
+### v6 新增：零依赖 HTTP 探针（一刀切开）
+
+`soda-probe-http.plugin` **不加载 JS、不需要 MITM/CA、不需要汽水、不需要订阅脚本下载、不涉及 https**：
+
+```
+[Rule]
+DOMAIN,neverssl.com,REJECT
+DOMAIN,www.neverssl.com,REJECT
+```
+
+用手机 **Safari 打开 `http://neverssl.com`**（纯 HTTP 站点，永不升级 HTTPS），只开这一个插件：
+
+| 现象 | 结论 |
+|---|---|
+| Safari 打不开 / Loon 最近请求显示 REJECT | Loon 规则引擎 + 插件加载都正常 → 问题在汽水侧（HTTPDNS / QUIC / 硬编码 IP），走下面 v6 诊断 |
+| Safari 照样打开 | **Loon 根本没接管流量**（VPN 没开 / 别的 VPN 冲突 / 插件压根没加载）→ 跟 https 完全无关，回到第 0 节的订阅 URL 与本地导入 |
+
+### v6 诊断三件套
+
+只在 HTTP 探针证明「Loon 活着」之后用：
+
+| 文件 | 作用 |
+|---|---|
+| `soda-force-tcp.plugin` | `[Rule] AND,((PROTOCOL,UDP),(DEST-PORT,443)),REJECT` 掐 QUIC 逼回落 TCP；同时放宽 MITM 域名 |
+| `soda-diagnostic-general.txt` | 粘进**主配置** `[General]` 段：`sni-sniffing = true`（硬编码 IP/HTTPDNS 时靠 TLS SNI 反查域名）、`domain-reject-mode = Request`（域名拒绝改到转发阶段，绕开自建 DNS）、`disable-udp-ports = 443`、`udp-fallback-mode = REJECT` |
+| `soda-noads-mitm.plugin` | 官方 3.5.1+ Plugin 示例用段名 `[Mitm]`，社区旧插件用 `[MITM]`。若新版解析器严格、把 `[MITM]` 整段忽略 → 不解密 → 脚本永不触发。这条只换段名 |
+
+**`[General]` 参数必须粘到主配置，不能放插件里**——插件的 `[General]` 只支持有限几项，写多了整段被忽略。
+
+按这个顺序试：HTTP 探针 → 加 `soda-diagnostic-general.txt` + `soda-force-tcp.plugin` → 触发领奖 → 看 Loon「最近请求」里汽水请求变成明文 HTTP/2 还是仍为 CONNECT/QUIC → 再启用主订阅。诊断完把 QUIC 拦截和 `[General]` 参数删掉，会影响其它 App。
 
 ---
 
@@ -43,13 +90,15 @@ soda-noads.zip
 > `http://raw...` 会 301 跳 https，这是 GitHub 的正常行为，Loon 会自行处理，不用管。
 > 若 ① 在你网络里 301 后被重置，直接用 ②。
 
-`?v=5` 已写进各 `.plugin` 的 `script-path` 用于破脚本缓存；**换版务必删除旧插件重新添加**，别只刷新。
+`?v=6` 已写进各 `.plugin` 的 `script-path` 用于破脚本缓存；**换版务必删除旧插件重新添加**，别只刷新。
 
 ---
 
 ## 1. 第一件事：跑零脚本探针
 
 别再靠通知栏判断了。新版 Loon 的 Response Script 是 **first-match**，且 `$notification.post` 还受 iOS 通知权限影响，两者都会造成"零反应"的假象。
+
+**v6 起先跑 `soda-probe-http.plugin`（Safari 打开 `http://neverssl.com`），见第 -1 节。** 它不碰汽水、不碰 https、不碰 MITM，能一刀切开「Loon 没接管流量」和「汽水绕过了 Loon」。确认 Loon 活着之后再跑下面这个汽水域名探针。
 
 `soda-probe.plugin` **不加载任何 JS、不需要 MITM、不需要通知权限**，只有两条 `[Rule]` REJECT：
 
@@ -101,7 +150,7 @@ Loon **3.5.1(983)** 起换了全新 Script 语法，主订阅用新语法并带 
 新语法逐字按官方模板：
 
 ```ini
-response if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/ads\/config/ then script("https://.../soda.js?v=5") with tag="汽水-广告总配置", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/ads\/config/ then script("https://.../soda.js?v=6") with tag="汽水-广告总配置", timeout=30, requires_body=true, enable=true
 ```
 
 `with` 只认 `enable / tag / img_url / timeout / debug / requires_body / binary_body_mode`；Response Script 强制要求 URL guard。
@@ -172,7 +221,7 @@ response if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/ads\/config/ then scr
 | `variants/fake.plugin` | 只看 UI 流程 |
 | `variants/replay.plugin` | 服务端硬校验 30s 时用；绑定 **http-request** 规则 |
 
-其他改法：编辑 `soda/scripts/soda.js` 第一行 → 提交 → 各 `.plugin` 里 `?v=5` 递增（破缓存）→ Loon 删插件重加；或 `$persistentStore` 写 key `soda.cfg`，值形如 `duration=5&notify=0`，优先级最高。
+其他改法：编辑 `soda/scripts/soda.js` 第一行 → 提交 → 各 `.plugin` 里 `?v=6` 递增（破缓存）→ Loon 删插件重加；或 `$persistentStore` 写 key `soda.cfg`，值形如 `duration=5&notify=0`，优先级最高。
 
 ---
 
@@ -201,7 +250,7 @@ POST /luna/advert/incentive/done      →  body {"launch_duration":30, ...}
 | 现象 | 处理 |
 |---|---|
 | **订阅加了毫无反应（本轮根因）** | URL 必须是 `http://raw` 开头，或换 jsDelivr / 本地 zip |
-| 探针 REJECT 生效但主订阅无日志 | 远程脚本下载失败 → 手机浏览器打开 `.../scripts/soda.js?v=5` 看是否返回 JS；换 jsdelivr 版 |
+| 探针 REJECT 生效但主订阅无日志 | 远程脚本下载失败 → 手机浏览器打开 `.../scripts/soda.js?v=6` 看是否返回 JS；换 jsdelivr 版 |
 | 日志有 `EXEC` 没 `HIT` | URL 不在 5 条路由内，脚本会打印真实 URL |
 | 通知一条没有但日志有 | iOS 通知权限 / Loon 通知设置，**以日志为准** |
 | 插件规则显示 CRON | 版本选错，≤982 换 `-legacy` |
@@ -219,14 +268,18 @@ POST /luna/advert/incentive/done      →  body {"launch_duration":30, ...}
 | `soda-noads-jsdelivr.plugin` | 新语法 + jsDelivr 通道（不受 `http://raw` 限制） |
 | `soda-noads-httpraw.plugin` | 订阅与脚本 URL 均 `http://raw`，保守备选 |
 | `soda-noads-legacy.plugin` | 旧语法，≤982 |
+| `soda-noads-mitm.plugin` | **段名 `[Mitm]`**（官方 3.5.1+ 写法），怀疑 `[MITM]` 被忽略时换这条 |
 | `soda-noads.conf` | 「订阅脚本」入口别名 |
-| **`soda-probe.plugin`** | **零脚本链路探针，2 条 REJECT 规则，测完删** |
+| **`soda-probe-http.plugin`** | **v6 首选：Safari 打开 `http://neverssl.com` 的零依赖探针，完全不碰 https/MITM/汽水** |
+| **`soda-force-tcp.plugin`** | **v6：掐 UDP443/QUIC 逼回落 TCP + 放宽 MITM 域名** |
+| **`soda-diagnostic-general.txt`** | **v6：粘进主配置 `[General]` 的诊断参数（sni-sniffing / domain-reject-mode=Request 等）** |
+| `soda-probe.plugin` | 汽水域名零脚本探针，2 条 REJECT 规则，测完删 |
 | `soda-sentinel.plugin` | 链路哨兵（极宽匹配，只打日志不改包） |
-| `scripts/soda.js` | 主脚本 v5：CRON 守卫、执行快照、命中通知、全字段扫描、request 观测 |
+| `scripts/soda.js` | 主脚本 v6：CRON 守卫、执行快照、命中通知、全字段扫描、request 观测 |
 | `scripts/sentinel.js` | 哨兵脚本 |
 | `scripts/soda-replay.js` | 方案 C 兜底脚本 |
 | `variants/` | 参数变体 / 重放订阅 |
-| `local/` | 离线版（相对 script-path），整目录打包 zip 直接导入 |
+| `local/` | 离线版（相对 script-path），整目录打包 zip 直接导入；v6 诊断件也在里面 |
 | `tools/build.py` | 从 `loon/` 源重新生成本目录内容 |
 
 仅供个人设备调试与协议学习使用。

@@ -8,7 +8,7 @@
 Loon 3.5.1(983)+ 使用全新 Script 语法（script(...) / with ...），
 主订阅默认输出 v2 语法；旧语法另存 -legacy 供 982 及以下版本使用。
 """
-import os, json, shutil
+import os, json, shutil, re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_JS = os.path.join(ROOT, "loon", "scripts", "soda.js")
@@ -19,7 +19,7 @@ OUT = os.path.join(ROOT, "gh")
 OWNER = "taiyuan0324"
 REPO = "zy"
 BRANCH = "main"
-VER = "5"   # 改脚本后 +1，破 GitHub raw / CDN 缓存
+VER = "6"   # 改脚本后 +1，破 GitHub raw / CDN 缓存
 SUB = "soda"  # 落在 zy 的 soda/ 子目录
 
 # 关键：Loon 官方手册要求「GitHub 托管的插件/订阅 URL 必须以 http://raw 开头」。
@@ -66,6 +66,8 @@ SENTINEL_V2 = r"/(qishui|luna|douyin|bytedance|snssdk|bytegecko)/i"
 SENTINEL_MITM = ("*.qishui.com, *.douyin.com, *.douyinpic.com, *.snssdk.com, "
                  "*.bytedance.net, *.bytegecko.com, api.qishui.com, "
                  "beta-luna.douyin.com, conf.qishui.com")
+# 诊断期扩大解密面，防 App 换域名 / 用 CDN 域名
+MITM_ALL = SENTINEL_MITM
 
 
 def meta(name, desc, minver=None):
@@ -97,8 +99,62 @@ def render_probe_plugin():
     return "\n".join(lines)
 
 
-def render_plugin_v2(base, js_rel, name, desc):
-    """新语法：response if ${url} ~= /.../ then script(...) with ..."""
+def render_probe_http():
+    """HTTP 探针：不加载任何 JS、不需要 MITM/CA、不需要汽水、不需要订阅脚本下载。
+    用手机 Safari 打开 http://neverssl.com 验证 Loon 的规则引擎/TUN 是否活着。"""
+    lines = meta("Loon · HTTP 引擎探针（Safari 测·零依赖）",
+                 "不加载 JS、不需要 MITM/CA、不需要汽水；Safari 打开 http://neverssl.com 应看不到页面")
+    lines += [
+        "[Rule]",
+        "DOMAIN,neverssl.com,REJECT",
+        "DOMAIN,www.neverssl.com,REJECT",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def render_force_tcp():
+    """掐 QUIC/UDP443 + 放宽解密域名。只放 [Rule]/[MITM]（插件确定支持的段），
+    [General] 参数另存 soda-diagnostic-general.txt 让用户粘进主配置，避免插件解析器忽略整段。"""
+    lines = meta("汽水 · 强制 TCP 回落（防 QUIC 绕过）",
+                 "掐 UDP443/QUIC 逼 App 回落 TCP 让 MITM 解密；诊断期用，会影响其它 App 的 QUIC")
+    lines += [
+        "[Rule]",
+        "# 3.5.1+ 可直接用：PROTOCOL,QUIC,REJECT（若报规则无效就删掉此注释下方两行之一）",
+        "AND,((PROTOCOL,UDP),(DEST-PORT,443)),REJECT",
+        "",
+        "[MITM]",
+        "hostname = " + MITM_ALL,
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def render_diagnostic_general():
+    """要粘进【主配置】[General] 段的诊断参数（不放插件里，插件 [General] 支持项有限）。
+    sni-sniffing：App 硬编码 IP / HTTPDNS 时靠 TLS SNI 反查域名做规则匹配
+    domain-reject-mode=Request：绕开 HTTPDNS，在转发阶段执行域名拒绝
+    disable-udp-ports / udp-fallback-mode / disable-stun：掐 QUIC 逼回落 TCP
+    """
+    return "\n".join([
+        "# 汽水诊断参数 —— 粘到 Loon【主配置】的 [General] 段，用完删掉",
+        "# 1) App 用 HTTPDNS / 硬编码 IP 时靠 TLS SNI 反查域名，让 DOMAIN 规则能匹配",
+        "#    3.5.0(968)+ 已自动探测，旧版才需显式写；写了无害",
+        "sni-sniffing = true",
+        "# 2) 域名拒绝放到转发阶段执行，绕开自建 DNS（默认 DNS 阶段会被 HTTPDNS 绕过）",
+        "domain-reject-mode = Request",
+        "# 3) 掐 QUIC(UDP 443)，逼 App 回落 TCP，MITM 才能解密",
+        "#    与 soda-force-tcp.plugin 的 AND 规则二选一即可，不必重复",
+        "disable-udp-ports = 443",
+        "udp-fallback-mode = REJECT",
+        "disable-stun = true",
+        "",
+    ])
+
+
+def render_plugin_v2(base, js_rel, name, desc, mitm_section="[MITM]"):
+    """新语法：response if ${url} ~= /.../ then script(...) with ...
+    mitm_section 可切 [Mitm]（官方 3.5.1+ Plugin 示例写法），排除段名大小写导致解密段被忽略。"""
     path = (base + "/" + js_rel + "?v=" + VER) if base else js_rel
     lines = meta(name, desc, "3.5.1(983)") + ["[Script]"]
     for regex, tag in ROUTES_V2:
@@ -111,7 +167,7 @@ def render_plugin_v2(base, js_rel, name, desc):
         'request if ${url} ~= %s then script("%s") with tag="汽水-领奖请求观测", timeout=30, requires_body=true, enable=true'
         % (REPLAY_V2, path)
     )
-    lines += ["", "[MITM]", "hostname = api.qishui.com, beta-luna.douyin.com", ""]
+    lines += ["", mitm_section, "hostname = api.qishui.com, beta-luna.douyin.com", ""]
     return "\n".join(lines)
 
 
@@ -170,8 +226,12 @@ def render_sentinel_v2(base):
 
 def render_js(cfg, source=None):
     src = source if source is not None else open(SRC_JS, encoding="utf-8").read()
+    # 源文件可能自带一行 var __SODA_ARGS__（本地调试用）。必须先剥掉，
+    # 否则生成物里两行 var，后者覆盖注入值，所有参数变体全部失效。
+    src = re.sub(r"(?m)^\s*var\s+__SODA_ARGS__\s*=\s*\{[^}]*\}\s*;\s*\r?\n",
+                 "", src.replace("\r\n", "\n"), count=1)
     head = "var __SODA_ARGS__ = %s;\n" % json.dumps(cfg, ensure_ascii=False, separators=(",", ":"))
-    return head + src.replace("\r\n", "\n")
+    return head + src
 
 
 def write(rel, text):
@@ -216,10 +276,19 @@ def main():
           render_plugin_v2(BASES["raw"], "scripts/soda.js",
                            "汽水音乐 · 激励广告配置改写",
                            "订阅脚本入口用；内容与 soda-noads.plugin 一致（新语法）"))
+    # 段名变体：官方 3.5.1+ Plugin 示例用 [Mitm]，旧社区插件用 [MITM]，两个都给
+    write("soda-noads-mitm.plugin",
+          render_plugin_v2(BASES["raw"], "scripts/soda.js",
+                           "汽水音乐 · 激励广告配置改写（[Mitm] 段名）",
+                           "若 [MITM] 段在新版被忽略导致不解密，换这条；新语法不变",
+                           mitm_section="[Mitm]"))
 
-    # 2.5) 零脚本链路探针：判定「订阅有没有被 Loon 加载」这条最上游的链路
+    # 2.5) 零依赖诊断：完全绕开 https / MITM / CA / 汽水 / 订阅脚本下载
     write("soda-probe.plugin", render_probe_plugin())
     write("soda-probe-jsdelivr.plugin", render_probe_plugin())
+    write("soda-probe-http.plugin", render_probe_http())
+    write("soda-force-tcp.plugin", render_force_tcp())
+    write("soda-diagnostic-general.txt", render_diagnostic_general())
 
     # 3) 链路哨兵（诊断用，独立插件）
     write("soda-sentinel.plugin", render_sentinel_v2(BASES["raw"]))
@@ -247,6 +316,12 @@ def main():
                                "Loon 982 及以下用这条"))
     write("local/soda-sentinel.plugin", render_sentinel_v2(""))
     write("local/soda-probe.plugin", render_probe_plugin())
+    write("local/soda-probe-http.plugin", render_probe_http())
+    write("local/soda-force-tcp.plugin", render_force_tcp())
+    write("local/soda-noads-mitm.plugin",
+          render_plugin_v2("", "scripts/soda.js", "汽水音乐 · 免广告领时长（离线·[Mitm]）",
+                           "若 [MITM] 段被忽略导致不解密，换这条", mitm_section="[Mitm]"))
+    write("local/soda-diagnostic-general.txt", render_diagnostic_general())
     write("local/scripts/soda.js", render_js(DEFAULT))
     write("local/scripts/soda-replay.js", open(SRC_REPLAY, encoding="utf-8").read())
     write("local/scripts/sentinel.js", sentinel_src)
