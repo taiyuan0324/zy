@@ -1,0 +1,15 @@
+#!name=汽水音乐 · retrieve
+#!desc=第二档：连 retrieve 的 launch_duration 一起压到 1s；纯 [Script]+[MITM]
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Script]
+http-response ^https?:\/\/api\.qishui\.com\/luna\/ads\/config script-path=https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-retrieve.js?v=1,requires-body=true,max-size=10485760,timeout=30,tag=汽水-广告总配置,enable=true
+http-response ^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/config script-path=https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-retrieve.js?v=1,requires-body=true,max-size=10485760,timeout=30,tag=汽水-激励配置,enable=true
+http-response ^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/retrieve script-path=https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-retrieve.js?v=1,requires-body=true,max-size=10485760,timeout=30,tag=汽水-广告素材,enable=true
+http-response ^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done script-path=https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-retrieve.js?v=1,requires-body=true,max-size=10485760,timeout=30,tag=汽水-领奖回调,enable=true
+http-response ^https?:\/\/beta-luna\.douyin\.com\/{1,2}luna\/advert\/fallback\/done\/info script-path=https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-retrieve.js?v=1,requires-body=true,max-size=10485760,timeout=30,tag=汽水-兜底token,enable=true
+
+[MITM]
+hostname = api.qishui.com, beta-luna.douyin.com
