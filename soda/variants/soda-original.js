@@ -1,33 +1,25 @@
-var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"alltime":0,"freq":1000,"notify":1,"probe":1,"video":0,"fake":0,"verbose":1};
+var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"alltime":0,"freq":1000,"notify":1,"snapshot":1,"probe":1,"video":0,"fake":0,"verbose":1};
 /**
- * 汽水音乐（luna / aid=8478）激励广告「跳过」Loon 脚本  v3
+ * 汽水音乐（luna / aid=8478）激励广告「跳过」Loon 脚本  v4
  * ---------------------------------------------------------------
- * v3 变更（针对「完全没效果」）：
- *   1) retrieve 默认开：done 请求体里回传 launch_duration:30，与 retrieve 下发值一致，
- *      说明倒计时读的是 retrieve，不是 ads/config。之前默认关 = 白改。
- *   2) 全字段递归扫描：任何层级里命中时长白名单的数字字段一律压到 duration，
- *      防止服务端换了字段路径/新增字段后漏改。
- *   3) 命中即系统通知（notify=1）：不用翻日志，通知栏直接看到脚本有没有跑、
- *      改了哪些字段、原始值多少。这是区分「脚本没跑」和「服务端不认」的关键。
- *   4) request 阶段观测（probe=1）：打印 done 请求体里 App 实际上报的 launch_duration，
- *      用来判定「我们改了响应，App 到底吃没吃」。只观测，绝不改写请求。
- *   5) done 成功/失败都通知，直接看服务端有没有发奖。
+ * v4 变更（针对「通知栏没反应」）：
+ *   1) 修阶段判断：v3 要求 $response.body !== undefined 才算响应阶段，
+ *      一旦 Loon 没给 body，所有响应都被当成 request 静默透传 → 零改写零通知。
+ *      现在只要 $response 对象存在就是响应阶段；body 缺失也能发命中通知。
+ *   2) snapshot=1：脚本「一旦被执行」就先发一条通知 + 日志，把阶段 / URL /
+ *      respBody 长度 / reqBody 长度打出来。用来区分「规则没匹配」和「逻辑没生效」。
+ *   3) 通知失败降级：try 吞掉后改为写日志，不再静默；提示去 Loon 日志看 HIT/EXEC 行
+ *      （iOS 通知权限 / Loon 通知设置可能吞掉通知，不能只靠通知栏判断）。
+ *   4) 未命中路由也发通知：若服务端换了域名/路径，能直接从通知里看到真实 URL。
  *
- * 铁律：只改「响应」，绝不改「请求」。请求带 x-gorgon / x-helios / x-medusa /
- *       bd-ticket-guard 多重签名，动一个字节即失效。
+ * 核心逻辑（v3 保留）：
+ *   - retrieve 默认开：done 请求体回传 launch_duration:30 = retrieve 下发值，
+ *     倒计时读的是 retrieve，不是 ads/config。
+ *   - alltime=1 递归扫描时长白名单字段，防服务端换字段路径。
+ *   - probe=1 request 阶段观测 done 上报值，只观测不改写。
  *
- * 参数（订阅 JS 头部注入 / 插件 argument / persistentStore key: soda.cfg）
- *   duration=1     目标倒计时秒数
- *   retrieve=1     改 retrieve 的 launch_duration（v3 默认开）
- *   adsconfig=1    改 /luna/ads/config
- *   incentcfg=1    改 /luna/advert/incentive/config
- *   alltime=1      递归扫描所有时长白名单字段
- *   freq=1000      抬升 freq_per_day（0=不改）
- *   notify=1       每条规则命中发系统通知
- *   probe=1        request 阶段观测 done 上报值
- *   video=0        替换广告素材 URL（videourl / videomd5）
- *   fake=0         done 失败时本地伪成功（仅 UI，无真实权益）
- *   verbose=1      打印日志
+ * 铁律：只改响应，绝不改请求。请求带 x-gorgon / x-helios / x-medusa /
+ *       bd-ticket-guard / x-ss-stub 多重签名，动一个字节即失效。
  */
 
 (function () {
@@ -36,21 +28,22 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
   var STORE_HIT = "soda.hit";
 
   var hasReq = typeof $request !== "undefined" && !!$request;
-  var hasResp = typeof $response !== "undefined" && !!$response &&
-                typeof $response.body !== "undefined";
+  var hasResp = typeof $response !== "undefined" && !!$response;
 
-  // CRON / 手动运行：Loon 不注入 $request / $response，安全跳过
+  // CRON / 手动运行：不注入 $request / $response，安全跳过
   if (!hasReq) {
     try { console.log(TAG + " 无 HTTP 上下文（CRON / 手动运行），本脚本由 HTTP 规则触发，已跳过"); } catch (e) {}
     try { if (typeof $done === "function") $done({}); } catch (e) {}
     return;
   }
 
+  var url = ($request && $request.url) || "";
+
   function readCfg() {
     var c = {
       duration: 1, adsconfig: 1, incentcfg: 1, retrieve: 1, alltime: 1,
-      freq: 1000, notify: 1, probe: 1, video: 0, videourl: "", videomd5: "",
-      fake: 0, verbose: 1
+      freq: 1000, notify: 1, snapshot: 1, probe: 1, video: 0,
+      videourl: "", videomd5: "", fake: 0, verbose: 1
     };
     function set(k, v) {
       if (!(k in c)) return;
@@ -87,7 +80,8 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
     if (C.verbose) { try { console.log(TAG + " " + s); } catch (e) {} }
   }
 
-  /* 命中通知：一眼判定脚本有没有跑 */
+  /* 命中留痕：通知 + 日志 + 持久计数。
+   * 通知可能被 iOS 权限吞掉，所以日志一定打，catch 里明确提示去看日志。 */
   function hit(route, detail) {
     log("HIT " + route + " | " + detail);
     var n = 0;
@@ -99,13 +93,26 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
     if (!C.notify) return;
     try {
       $notification.post("汽水·" + route, "第 " + (n + 1) + " 次命中", String(detail).slice(0, 140));
-    } catch (e) {}
+    } catch (e) {
+      log("通知发送失败（iOS 通知权限 / Loon 通知设置）：" + e + " → 请看 Loon 日志里的 HIT 行");
+    }
+  }
+
+  /* 执行快照：只要 Loon 真的跑了这个脚本，必然留下这一行 */
+  function snapshot() {
+    var stage = hasResp ? "RESP" : "REQ";
+    var rb = -1, qb = -1;
+    try { rb = (hasResp && $response.body != null) ? String($response.body).length : -1; } catch (e) { rb = -2; }
+    try { qb = ($request && $request.body != null) ? String($request.body).length : -1; } catch (e) { qb = -2; }
+    var info = stage + " respBody=" + rb + "B reqBody=" + qb + "B url=" + short(url, 110);
+    log("EXEC " + info);
+    if (C.snapshot) hit("脚本已执行", info);
   }
 
   function safeParse(body) {
     if (!body) return null;
     try { return JSON.parse(body); }
-    catch (e) { log("JSON 解析失败: " + e); return null; }
+    catch (e) { log("JSON 解析失败: " + e + " bodyHead=" + short(body, 60)); return null; }
   }
   function finish(obj) { $done({ body: JSON.stringify(obj) }); }
   function short(s, n) {
@@ -113,8 +120,7 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
     return s.length > n ? s.slice(0, n) + "...(" + s.length + "B)" : s;
   }
 
-  /* 全字段递归：任何层级的时长白名单数字字段压到 C.duration
-   * 精确 key 匹配，绝不碰 expire_time / settings_time / *_type / timestamp */
+  /* 递归时长扫描：精确 key 白名单，不碰 expire_time / *_type / 时间戳 */
   var DUR_KEYS = /^(duration|reward_duration|advert_duration|launch_duration|ad_duration|video_duration|play_duration|show_duration|min_duration|max_duration|watch_duration|watch_time|reward_time|need_watch_time|countdown|countdown_sec|reward_countdown|play_time|ad_show_time)$/i;
   function scanDurations(o, path, changed) {
     if (!o || typeof o !== "object") return;
@@ -134,8 +140,13 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
 
   /* ---------------- 1. /luna/ads/config ---------------- */
   function handleAdsConfig() {
-    var j = safeParse($response.body);
-    if (!j) { hit("ads/config", "响应非 JSON，透传 bodyLen=" + short($response.body, 0).length); return $done({}); }
+    var j = safeParse($response && $response.body);
+    if (!j) {
+      hit("ads/config", "响应无 body / 非 JSON（respBody=" +
+          ((($response && $response.body) != null) ? String($response.body).length : -1) +
+          "B，可能是 gzip 或 requires_body 未生效）");
+      return $done({});
+    }
     var changed = [];
     if (C.adsconfig) {
       if (j.feed_ads_config && typeof j.feed_ads_config.reward_duration === "number") {
@@ -161,8 +172,8 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
 
   /* ---------------- 2. /luna/advert/incentive/config ---------------- */
   function handleIncentiveConfig() {
-    var j = safeParse($response.body);
-    if (!j) { hit("incentive/config", "响应非 JSON，透传"); return $done({}); }
+    var j = safeParse($response && $response.body);
+    if (!j) { hit("incentive/config", "响应无 body / 非 JSON"); return $done({}); }
     var changed = [];
     if (C.incentcfg && j.feed_advert_config && typeof j.feed_advert_config.advert_duration === "number") {
       var old = j.feed_advert_config.advert_duration;
@@ -177,8 +188,8 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
 
   /* ---------------- 3. /luna/advert/incentive/retrieve ---------------- */
   function handleRetrieve() {
-    var j = safeParse($response.body);
-    if (!j) { hit("retrieve", "响应非 JSON，透传"); return $done({}); }
+    var j = safeParse($response && $response.body);
+    if (!j) { hit("retrieve", "响应无 body / 非 JSON"); return $done({}); }
     var changed = [], cnt = 0;
     if (C.retrieve) {
       var map = j.ad_infos_map || {};
@@ -193,9 +204,8 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
       });
     }
     if (C.video && C.videourl) {
-      var map2 = j.ad_infos_map || {};
-      Object.keys(map2).forEach(function (bucket) {
-        ((map2[bucket] && map2[bucket].ad_infos) || []).forEach(function (ad) {
+      Object.keys(j.ad_infos_map || {}).forEach(function (bucket) {
+        ((j.ad_infos_map[bucket] && j.ad_infos_map[bucket].ad_infos) || []).forEach(function (ad) {
           ((ad.creative_info && ad.creative_info.video_list) || []).forEach(function (v) {
             v.url = C.videourl;
             if (C.videomd5) v.md5_check = C.videomd5;
@@ -212,10 +222,9 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
 
   /* ---------------- 4. /luna/advert/incentive/done ---------------- */
   function handleDone() {
-    var j = safeParse($response.body);
-    if (!j) { hit("done", "响应非 JSON"); return $done({}); }
-    var code = j.status_code;
-    var amount = 0;
+    var j = safeParse($response && $response.body);
+    if (!j) { hit("done", "响应无 body / 非 JSON"); return $done({}); }
+    var code = j.status_code, amount = 0;
     try {
       var rd = j.reward_details || {}, keys = Object.keys(rd);
       if (keys.length) amount = rd[keys[0]].amount || 0;
@@ -232,7 +241,7 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
       } catch (e) {}
     } else {
       log("done 失败: code=" + code + " msg=" + msg);
-      hit("done 失败", "code=" + code + " msg=" + msg + "（服务端拒绝了，需换 replay 方案）");
+      hit("done 失败", "code=" + code + " msg=" + msg + "（服务端拒绝，需换 replay 方案）");
       if (C.fake) {
         var fakeBody = {
           reward_details: { "0": { reward_type: 0, amount: 1800, expire_time: Math.floor(Date.now() / 1000) + 1800, claim_status: 1 } },
@@ -246,10 +255,10 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
     return $done({});
   }
 
-  /* ---------------- 5. fallback token（只观测 + 通知） ---------------- */
+  /* ---------------- 5. fallback token ---------------- */
   function handleFallback() {
-    var j = safeParse($response.body);
-    if (!j) { hit("fallback", "响应非 JSON"); return $done({}); }
+    var j = safeParse($response && $response.body);
+    if (!j) { hit("fallback", "响应无 body / 非 JSON"); return $done({}); }
     var detail = "status_code=" + j.status_code;
     if (j.post_done_extra) {
       try {
@@ -263,21 +272,21 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
     return $done({});
   }
 
-  /* ---------------- request 阶段：观测，不改写 ---------------- */
-  function handleProbe(url) {
-    if (!C.probe || !/\/luna\/advert\/incentive\/done(\?|$)/.test(url)) return $done({});
+  /* ---------------- request 阶段：只观测 ---------------- */
+  function handleProbe(u) {
+    if (!C.probe || !/\/luna\/advert\/incentive\/done(\?|$)/.test(u)) return $done({});
     var b = ($request && $request.body) || "";
     var ld = /"launch_duration"\s*:\s*(\d+)/.exec(b);
     var tk = /"time_token"\s*:\s*"([^"]{0,16})/.exec(b);
     hit("REQ-done 上报", "App 实际 launch_duration=" + (ld ? ld[1] : "?") +
         " token=" + (tk ? "有" : "无") + " bodyLen=" + b.length +
-        (ld && ld[1] === String(C.duration) ? " | 改写已被 App 采用 ✓" : " | App 仍上报原值 ✗"));
-    return $done({});   // 空对象 = 不修改请求，签名不受影响
+        (ld && ld[1] === String(C.duration) ? " | 改写已被采用 ✓" : " | App 仍上报原值 ✗"));
+    return $done({});
   }
 
   /* ---------------- 路由 ---------------- */
-  var url = ($request && $request.url) || "";
-  if (!hasResp) return handleProbe(url);   // request 阶段
+  snapshot();
+  if (!hasResp) return handleProbe(url);
 
   if (/\/luna\/ads\/config(\?|$)/.test(url)) return handleAdsConfig();
   if (/\/luna\/advert\/incentive\/config(\?|$)/.test(url)) return handleIncentiveConfig();
@@ -285,6 +294,7 @@ var __SODA_ARGS__ = {"duration":1,"adsconfig":1,"incentcfg":1,"retrieve":0,"allt
   if (/\/luna\/advert\/incentive\/done(\?|$)/.test(url)) return handleDone();
   if (/\/luna\/advert\/fallback\/done\/info(\?|$)/.test(url)) return handleFallback();
 
-  log("未匹配路由 " + (($request && $request.method) || "") + " " + url);
+  // 规则命中了但 URL 不在预期内 → 服务端可能换了域名/路径，直接报出真实 URL
+  hit("未匹配路由", (($request && $request.method) || "") + " " + short(url, 130));
   $done({});
 })();

@@ -5,7 +5,7 @@
 #!homepage=https://github.com/taiyuan0324/zy
 
 [Script]
-request if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/soda-replay.js?v=3") with tag="汽水-done重放", timeout=30, requires_body=true, enable=true
+request if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/soda-replay.js?v=4") with tag="汽水-done重放", timeout=30, requires_body=true, enable=true
 
 [MITM]
 hostname = api.qishui.com

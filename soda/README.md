@@ -1,4 +1,4 @@
-# 汽水音乐 · 激励广告配置改写（Loon 订阅）· v3
+# 汽水音乐 · 激励广告配置改写（Loon 订阅）· v4
 
 仓库：`taiyuan0324/zy`，本目录 `soda/`。
 
@@ -40,6 +40,42 @@ v3 改动：
 
 ---
 
+## 0.5 零通知 / 零效果：先跑「链路哨兵」
+
+触发领奖后**一条通知都没有**，说明脚本没跑到 `hit()`，跟广告逻辑无关了。别再调时长字段，先用哨兵把链路切开：
+
+```
+https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/soda-sentinel.plugin
+```
+
+哨兵用极宽 URL 正则 `/(qishui|luna|douyin|bytedance|snssdk|bytegecko)/i` + 通配 MITM，只要 App 有任何相关请求经过 Loon 就命中；**不改任何请求/响应**，只做三件事：`console.log("[哨兵] ...")`、`$notification.post`、`$persistentStore` 记最后 URL。
+
+**操作顺序（关键）**
+
+1. **临时只启用哨兵这一个插件，把其它插件全部关掉。** 新版 Loon 的 Response Script 是 **first-match** —— 只选配置顺序里第一条命中的规则。你抓包里 `adrules.top` / `yfamilys.com` / `kelee.one` 等一堆去广告插件，任何一条更靠前的宽匹配 response 规则都会把我们的规则挤掉。
+2. 打开汽水音乐随便点几下（不必领奖），看 Loon → 脚本 → 日志有没有 `[哨兵]` 行。
+3. 判定：
+
+| 现象 | 结论 | 处理 |
+|---|---|---|
+| 日志有 `[哨兵]`，通知栏没弹 | 脚本引擎正常，只是 **iOS 通知权限 / Loon 通知设置**吞了通知 | 系统设置给 Loon 开通知；或全程看日志（v4 已把通知失败降级到日志） |
+| 日志和通知都没有 | 规则没匹配 / 脚本没下载 / 订阅没更新 | 见下面 4 项 |
+| 日志里出现**没见过的域名或路径** | App 升级换了接口，主订阅那 5 条正则全不匹配 | 把日志里的真实 URL 发我，改规则 |
+
+日志和通知都没有时，逐项查：
+
+- **远程脚本能不能下载**：手机浏览器直接打开
+  `https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/scripts/sentinel.js?v=4`，应返回 JS 文本。打不开就换 `soda-sentinel-jsdelivr.plugin`。
+- **订阅是不是真的 v4**：Loon 插件页里应有 2 条规则、tag 为「汽水-哨兵-REQ / RESP」、script-path 末尾 `?v=4`。还是 v3 或旧规则 → **删除插件重新添加**（ETag 缓存）。
+- **MITM 是否真解密**：Loon → 最近请求，找汽水的请求，看是明文 HTTP/2 还是 CONNECT 隧道。CA 已信任 ≠ App 没做 SSL pinning / 没走 QUIC(HTTP/3)。
+- **App 版本变化**：`conf.qishui.com` 云控、`abtest-ch.snssdk.com` 实验配置可能改了激励入口路径。
+
+哨兵验证通过后，**关掉哨兵、只开主订阅**，再看 `[汽水] EXEC ...` / `[汽水] HIT ...` 日志行。v4 起脚本一旦被执行就先打 `EXEC`（含阶段 / URL / respBody 长度），所以「规则匹配了但没生效」和「规则压根没匹配」能一眼分开。
+
+> v4 顺手修了一个真 bug：v3 要求 `$response.body !== undefined` 才算响应阶段，Loon 一旦没给 body，所有响应都被当成 request 静默透传 → 零改写零通知。现在只要 `$response` 对象存在就是响应阶段，body 缺失也会发通知说明。
+
+---
+
 ## 1. 先选对版本
 
 Loon **3.5.1(983)** 起换了全新 Script 语法：旧写法 `http-response ... script-path=...` 换成 `response if ${url} ~= /.../ then script(...) with ...`。版本选错会出现脚本被挂成 `CRON`、类型识别异常。
@@ -71,9 +107,9 @@ http://raw.githubusercontent.com/taiyuan0324/zy/main/soda/soda-noads.plugin
 
 ---
 
-## 2. 三步判定（v3 核心，看通知栏就够）
+## 2. 三步判定（看通知栏或 Loon 日志）
 
-导入主订阅 → 打开汽水音乐 → 触发一次「看广告领 VIP」，看系统通知：
+导入主订阅 → 打开汽水音乐 → 触发一次「看广告领 VIP」。通知可能被 iOS 权限吞掉，**以 Loon → 脚本 → 日志里的 `[汽水] EXEC` / `[汽水] HIT` 行为准**：
 
 | 通知栏现象 | 结论 | 下一步 |
 |---|---|---|
@@ -113,6 +149,7 @@ http://raw.githubusercontent.com/taiyuan0324/zy/main/soda/soda-noads.plugin
 | `alltime` | 1 | 递归扫描时长白名单字段 |
 | `freq` | 1000 | 把 `freq_per_day` 抬到该值（0=不改） |
 | `notify` | 1 | 命中发系统通知（诊断完可关） |
+| `snapshot` | 1 | 脚本一执行就先发「脚本已执行」通知 + `EXEC` 日志（含阶段/URL/body 长度） |
 | `probe` | 1 | request 阶段观测 done 上报值，**只观测不改写** |
 | `video` | 0 | 替换广告素材 URL（需 `videourl` + `videomd5`） |
 | `fake` | 0 | done 失败时本地伪成功（**仅 UI，无真实权益**） |
@@ -120,6 +157,8 @@ http://raw.githubusercontent.com/taiyuan0324/zy/main/soda/soda-noads.plugin
 
 | 变体 | 订阅 URL | 用途 |
 |---|---|---|
+| **链路哨兵** | `.../soda/soda-sentinel.plugin` | **零通知时先跑这个**；极宽匹配，只诊断不改包（见 0.5 节） |
+| 哨兵·jsDelivr | `.../soda/soda-sentinel-jsdelivr.plugin` | raw 拉不到脚本时换这条 |
 | `quiet` | `.../soda/variants/quiet.plugin` | 诊断通过后关掉通知轰炸 |
 | `d5` | `.../soda/variants/d5.plugin` | 保守档 5 秒，降低服务端时钟校验风险 |
 | `original` | `.../soda/variants/original.plugin` | 对照档：恢复 v2 行为（retrieve=0），用于 A/B |
@@ -130,7 +169,7 @@ http://raw.githubusercontent.com/taiyuan0324/zy/main/soda/soda-noads.plugin
 
 其他改法：
 
-- 编辑 `soda/scripts/soda.js` 第一行 → 提交 → 各 `.plugin` 里 `?v=3` 递增（破缓存）→ Loon 刷新订阅
+- 编辑 `soda/scripts/soda.js` 第一行 → 提交 → 各 `.plugin` 里 `?v=4` 递增（破缓存）→ Loon 刷新订阅
 - `$persistentStore` 写 key `soda.cfg`，值形如 `duration=5&notify=0`，优先级最高
 
 ---
@@ -139,7 +178,7 @@ http://raw.githubusercontent.com/taiyuan0324/zy/main/soda/soda-noads.plugin
 
 | 项 | 说明 |
 |---|---|
-| GitHub raw | 约 5 分钟缓存；script-path 后 `?v=3` 递增即可破 |
+| GitHub raw | 约 5 分钟缓存；script-path 后 `?v=4` 递增即可破 |
 | jsDelivr `@main` | 约 12 小时；可用 commit sha |
 | Loon 侧 | 订阅请求带 `If-None-Match`；改文件后 ETag 会变，必要时删插件重加 |
 
@@ -151,7 +190,10 @@ http://raw.githubusercontent.com/taiyuan0324/zy/main/soda/soda-noads.plugin
 
 | 现象 | 处理 |
 |---|---|
-| 一条通知都没有 | ① CA 未信任 ② MITM 域名没加 ③ App 走 QUIC/HTTP3，关该 App 的 UDP 或强制 HTTPS 解密 ④ 别的插件有更早的 Response Script 抢匹配，先只留这一个插件 ⑤ 订阅没加载成功 |
+| 通知栏一条都没有 | **先跑 0.5 节哨兵**；多半是别的插件的 Response Script 抢了 first-match，或 iOS 通知权限吞了通知（看日志，别只看通知栏） |
+| 日志有 `EXEC` 但没 `HIT` | 规则匹配了但 URL 不在 5 条路由内（接口换了）→ v4 会发「未匹配路由」并带真实 URL |
+| 日志连 `EXEC` 都没有 | 规则没匹配 / 远程脚本没下载 / 订阅还是旧版，逐项按 0.5 节排查 |
+| 一条通知都没有（老排错项） | ① CA 未信任 ② MITM 域名没加 ③ App 走 QUIC/HTTP3 ④ 别的插件抢匹配 ⑤ 订阅没加载成功 |
 | 插件里规则显示为 CRON | 版本选错，换 `-legacy`（≤982）或确认主订阅是新语法 |
 | 订阅报格式错误 | 按第 1 节把 `https://raw` 换成 `http://raw` |
 | 订阅成功但脚本下载超时 | 手机浏览器打开 plugin 里 `script-path` URL，确认返回 JS 文本 |
@@ -181,7 +223,9 @@ http://raw.githubusercontent.com/taiyuan0324/zy/main/soda/soda-noads.plugin
 | `soda-noads-jsdelivr.plugin` | 新语法 + jsDelivr 通道 |
 | `soda-noads-legacy.plugin` | 旧语法，Loon ≤982 |
 | `soda-noads.conf` | 「订阅脚本」入口别名 |
-| `scripts/soda.js` | 主脚本 v3，含 CRON 守卫、命中通知、全字段扫描、request 观测 |
+| `scripts/soda.js` | 主脚本 v4，含 CRON 守卫、执行快照、命中通知、全字段扫描、request 观测、通知降级 |
+| `scripts/sentinel.js` | 链路哨兵脚本，极宽匹配只发日志/通知，不改包 |
+| `soda-sentinel.plugin` | **零通知时先导入这个**；1 response + 1 request，通配 MITM |
 | `scripts/soda-replay.js` | 方案 C 兜底脚本 |
 | `variants/*.plugin` + `variants/soda-*.js` | 参数变体 / 重放订阅 |
 | `local/` | 离线版（相对 script-path），整目录打包 zip 可直接导入 |

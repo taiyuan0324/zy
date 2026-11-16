@@ -13,12 +13,13 @@ import os, json, shutil
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_JS = os.path.join(ROOT, "loon", "scripts", "soda.js")
 SRC_REPLAY = os.path.join(ROOT, "loon", "scripts", "soda-replay.js")
+SRC_SENTINEL = os.path.join(ROOT, "tools", "sentinel.js")
 OUT = os.path.join(ROOT, "gh")
 
 OWNER = "taiyuan0324"
 REPO = "zy"
 BRANCH = "main"
-VER = "3"   # 改脚本后 +1，破 GitHub raw / CDN 缓存
+VER = "4"   # 改脚本后 +1，破 GitHub raw / CDN 缓存
 SUB = "soda"  # 落在 zy 的 soda/ 子目录
 
 BASES = {
@@ -28,13 +29,14 @@ BASES = {
 
 DEFAULT = {
     "duration": 1, "adsconfig": 1, "incentcfg": 1, "retrieve": 1, "alltime": 1,
-    "freq": 1000, "notify": 1, "probe": 1, "video": 0, "fake": 0, "verbose": 1
+    "freq": 1000, "notify": 1, "snapshot": 1, "probe": 1, "video": 0,
+    "fake": 0, "verbose": 1
 }
 VARIANTS = {
-    "d5":       ({"duration": 5},                 "保守档：倒计时压到 5s，降低服务端时钟校验风险"),
-    "quiet":    ({"notify": 0, "verbose": 0},    "静默档：关掉命中通知与日志，功能完全一致"),
-    "original": ({"retrieve": 0, "alltime": 0},  "对照档：恢复 v2 行为（只改 ads/config + incentcfg）"),
-    "fake":     ({"fake": 1, "verbose": 1},      "调试档：done 失败时本地伪成功（仅 UI，无真实权益）"),
+    "d5":       ({"duration": 5},                        "保守档：倒计时压到 5s，降低服务端时钟校验风险"),
+    "quiet":    ({"notify": 0, "snapshot": 0, "verbose": 0}, "静默档：关掉命中通知与日志，功能完全一致"),
+    "original": ({"retrieve": 0, "alltime": 0},          "对照档：恢复 v2 行为（只改 ads/config + incentcfg）"),
+    "fake":     ({"fake": 1, "verbose": 1},              "调试档：done 失败时本地伪成功（仅 UI，无真实权益）"),
 }
 
 # 旧语法（Loon <= 3.5.1(982)）
@@ -55,6 +57,11 @@ ROUTES_V2 = [
     (r"/^https?:\/\/beta-luna\.douyin\.com\/{1,2}luna\/advert\/fallback\/done\/info/", "汽水-兜底token"),
 ]
 REPLAY_V2 = r"/^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/"
+# 哨兵：极宽 URL 匹配，用来判定「Loon 有没有执行插件脚本」这条链路
+SENTINEL_V2 = r"/(qishui|luna|douyin|bytedance|snssdk|bytegecko)/i"
+SENTINEL_MITM = ("*.qishui.com, *.douyin.com, *.douyinpic.com, *.snssdk.com, "
+                 "*.bytedance.net, *.bytegecko.com, api.qishui.com, "
+                 "beta-luna.douyin.com, conf.qishui.com")
 
 
 def meta(name, desc):
@@ -120,6 +127,25 @@ def render_replay_v2(base):
     return "\n".join(lines)
 
 
+def render_sentinel_v2(base):
+    """链路哨兵：极宽 URL 正则 + 通配 MITM，只发通知与日志，不改包"""
+    path = (base + "/scripts/sentinel.js?v=" + VER) if base else "scripts/sentinel.js"
+    lines = meta("汽水 · 链路哨兵（只诊断）",
+                 "极宽 URL 匹配，命中即通知并打印真实 URL；诊断时只启用本插件，用完关闭")
+    lines += [
+        "[Script]",
+        'response if ${url} ~= %s then script("%s") with tag="汽水-哨兵-RESP", timeout=30, requires_body=true, enable=true'
+        % (SENTINEL_V2, path),
+        'request if ${url} ~= %s then script("%s") with tag="汽水-哨兵-REQ", timeout=30, requires_body=true, enable=true'
+        % (SENTINEL_V2, path),
+        "",
+        "[MITM]",
+        "hostname = " + SENTINEL_MITM,
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_js(cfg, source=None):
     src = source if source is not None else open(SRC_JS, encoding="utf-8").read()
     head = "var __SODA_ARGS__ = %s;\n" % json.dumps(cfg, ensure_ascii=False, separators=(",", ":"))
@@ -139,9 +165,12 @@ def main():
         shutil.rmtree(OUT)
     os.makedirs(OUT)
 
+    sentinel_src = open(SRC_SENTINEL, encoding="utf-8").read()
+
     # 1) 脚本
     write("scripts/soda.js", render_js(DEFAULT))
     write("scripts/soda-replay.js", open(SRC_REPLAY, encoding="utf-8").read())
+    write("scripts/sentinel.js", sentinel_src)
 
     # 2) 主订阅：v2 新语法（raw / jsdelivr）+ legacy 旧语法
     write("soda-noads.plugin",
@@ -161,7 +190,11 @@ def main():
                            "汽水音乐 · 激励广告配置改写",
                            "订阅脚本入口用；内容与 soda-noads.plugin 一致（新语法）"))
 
-    # 3) 参数变体（v2）
+    # 3) 链路哨兵（诊断用，独立插件）
+    write("soda-sentinel.plugin", render_sentinel_v2(BASES["raw"]))
+    write("soda-sentinel-jsdelivr.plugin", render_sentinel_v2(BASES["jsdelivr"]))
+
+    # 4) 参数变体（v2）
     for name, (override, desc) in VARIANTS.items():
         cfg = dict(DEFAULT)
         cfg.update(override)
@@ -171,20 +204,22 @@ def main():
               render_plugin_v2(BASES["raw"], js_rel, "汽水音乐 · %s" % name,
                                desc + "；新语法"))
 
-    # 4) 方案 C 重放（v2 http-request）
+    # 5) 方案 C 重放（v2 http-request）
     write("variants/replay.plugin", render_replay_v2(BASES["raw"]))
 
-    # 5) 本地离线导入版
+    # 6) 本地离线导入版
     write("local/soda-noads.plugin",
           render_plugin_v2("", "scripts/soda.js", "汽水音乐 · 免广告领时长（离线·新语法）",
                            "下载整个 local/ 打包 zip 导入 Loon，无需外网"))
     write("local/soda-noads-legacy.plugin",
           render_plugin_legacy("", "scripts/soda.js", "汽水音乐 · 免广告领时长（离线·旧语法）",
                                "Loon 982 及以下用这条"))
+    write("local/soda-sentinel.plugin", render_sentinel_v2(""))
     write("local/scripts/soda.js", render_js(DEFAULT))
     write("local/scripts/soda-replay.js", open(SRC_REPLAY, encoding="utf-8").read())
+    write("local/scripts/sentinel.js", sentinel_src)
 
-    # 6) 构建脚本与 README
+    # 7) 构建脚本与 README
     write("tools/build.py", open(os.path.abspath(__file__), encoding="utf-8").read())
     write("README.md", open(os.path.join(ROOT, "tools", "gh_readme.md"), encoding="utf-8").read())
 
