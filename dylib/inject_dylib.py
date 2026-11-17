@@ -10,7 +10,7 @@
 
 用法：
   python inject_dylib.py --ipa 汽水音乐_21.7.0.ipa \
-                         --dylib seagull-v2.dylib --dylib libluna.dylib \
+                         --dylib seagull-v3.dylib --dylib libluna.dylib \
                          --out 汽水音乐_patched.ipa
 
   --dylib 可重复传，按顺序追加 LC_LOAD_DYLIB（先注入的先执行 constructor）。
