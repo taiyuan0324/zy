@@ -113,6 +113,26 @@ def render_probe_http():
     return "\n".join(lines)
 
 
+def render_probe4():
+    """探针 v4：只查两件事，不做任何拒绝/改写。
+    A) MITM 在本机到底通不通 —— 用 www.baidu.com 当对照（能解密就会显示明文路径）
+    B) 汽水真实 API 主机 —— 把 *-lq.qishui.com 也纳入 MITM，解不开就是证书固定。"""
+    lines = meta("汽水 · 探针 v4（MITM 可用性 + 真实主机·测完删）",
+                 "不拒绝任何请求：MITM 只加 www.baidu.com 与汽水全域名，用请求记录判断解密能力")
+    lines += [
+        "[Rule]",
+        "# 唯一一条对照组：开着浏览器打不开 qq.com，证明规则引擎活着",
+        "DOMAIN,www.qq.com,REJECT",
+        "",
+        "[MITM]",
+        "# A) 全局 MITM 对照：Safari 打开 https://www.baidu.com，能显示明文路径=MITM 正常",
+        "# B) 汽水真实主机：*-lq.qishui.com 是这次日志里冒出来的新域名",
+        "hostname = www.baidu.com, *.qishui.com, *-lq.qishui.com, qishui.com",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_probe3(safe=False):
     """探针 v3：插件内直接掐 QUIC + 大范围后缀匹配，不用改主配置 [General]。
     safe=True 时去掉 AND 复合规则（老版本可能不认），只留域名规则。"""
@@ -340,6 +360,7 @@ def main():
     write("soda-probe-http2.plugin", render_probe_http2())
     write("soda-probe3.plugin", render_probe3())
     write("soda-probe3-safe.plugin", render_probe3(safe=True))
+    write("soda-probe4.plugin", render_probe4())
     write("soda-force-tcp.plugin", render_force_tcp())
     write("soda-diagnostic-general.txt", render_diagnostic_general())
 
@@ -373,6 +394,7 @@ def main():
     write("local/soda-probe-http2.plugin", render_probe_http2())
     write("local/soda-probe3.plugin", render_probe3())
     write("local/soda-probe3-safe.plugin", render_probe3(safe=True))
+    write("local/soda-probe4.plugin", render_probe4())
     write("local/soda-force-tcp.plugin", render_force_tcp())
     write("local/soda-noads-mitm.plugin",
           render_plugin_v2("", "scripts/soda.js", "汽水音乐 · 免广告领时长（离线·[Mitm]）",

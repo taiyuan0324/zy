@@ -1,0 +1,14 @@
+#!name=汽水 · 探针 v4（MITM 可用性 + 真实主机·测完删）
+#!desc=不拒绝任何请求：MITM 只加 www.baidu.com 与汽水全域名，用请求记录判断解密能力
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Rule]
+# 唯一一条对照组：开着浏览器打不开 qq.com，证明规则引擎活着
+DOMAIN,www.qq.com,REJECT
+
+[MITM]
+# A) 全局 MITM 对照：Safari 打开 https://www.baidu.com，能显示明文路径=MITM 正常
+# B) 汽水真实主机：*-lq.qishui.com 是这次日志里冒出来的新域名
+hostname = www.baidu.com, *.qishui.com, *-lq.qishui.com, qishui.com
