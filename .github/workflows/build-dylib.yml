@@ -1,0 +1,50 @@
+name: build-dylib
+
+on:
+  push:
+    paths:
+      - 'dylib/**'
+      - '.github/workflows/build-dylib.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+          clang --version | head -2
+
+      - name: Compile arm64 dylib
+        run: |
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          clang -arch arm64 \
+                -dynamiclib \
+                -fobjc-arc \
+                -O2 \
+                -isysroot "$SDK" \
+                -miphoneos-version-min=15.0 \
+                -framework Foundation \
+                -framework UIKit \
+                -o seagull.dylib dylib/seagull.m
+          ls -la seagull.dylib
+          file seagull.dylib
+          otool -hv seagull.dylib
+          echo "--- exported symbols ---"
+          nm -gU seagull.dylib | head -10
+
+      - name: Ad-hoc sign
+        run: |
+          codesign -f -s - seagull.dylib
+          codesign -dv seagull.dylib 2>&1 | head -6
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seagull-dylib-arm64
+          path: seagull.dylib
+          if-no-files-found: error
+          retention-days: 30
