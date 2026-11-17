@@ -30,33 +30,37 @@ jobs:
                 -miphoneos-version-min=15.0 \
                 -framework Foundation \
                 -framework UIKit \
-                -o seagull-v2.dylib dylib/seagull.m
-          ls -la seagull-v2.dylib
-          file seagull-v2.dylib
-          otool -hv seagull-v2.dylib
+                -o seagull-v3.dylib dylib/seagull.m
+          ls -la seagull-v3.dylib
+          file seagull-v3.dylib
+          otool -hv seagull-v3.dylib
           echo "--- exported symbols ---"
-          nm -gU seagull-v2.dylib | head -10
+          nm -gU seagull-v3.dylib | head -10
 
       - name: Assert - no network / no rootVC hook (v1 事故防回归)
         run: |
-          echo "检查 v2 是否残留会卡启动的 hook 字符串："
+          echo "检查 v3 是否残留会卡启动的 hook 字符串："
           for bad in "dataTaskWithRequest" "setRootViewController" "NSURLSession"; do
-            if strings seagull-v2.dylib | grep -q "$bad"; then
+            if strings seagull-v3.dylib | grep -q "$bad"; then
               echo "::error::残留危险字符串 $bad —— v1 事故会复现"; exit 1
             fi
             echo "  [OK] 无 $bad"
           done
-          echo "检查是否仍有弹窗拦截："
-          strings seagull-v2.dylib | grep -q "AntiCheatViewController" && echo "  [OK] AntiCheatViewController 拦截在" || { echo "::error::拦截逻辑丢了"; exit 1; }
+          echo "检查弹窗拦截仍在："
+          strings seagull-v3.dylib | grep -q "AntiCheatViewController" && echo "  [OK] AntiCheatViewController 拦截在" || { echo "::error::拦截逻辑丢了"; exit 1; }
+          echo "检查判定源 hook 点齐全："
+          for good in "isAppStoreChannel" "isJailBroken" "isInjected" "checkSignAuthIfNeed" "isSwitchOn" "makeKeyAndVisible"; do
+            strings seagull-v3.dylib | grep -q "$good" && echo "  [OK] $good" || { echo "::error::缺少 hook 点 $good"; exit 1; }
+          done
 
       - name: Ad-hoc sign
         run: |
-          codesign -f -s - seagull-v2.dylib
-          codesign -dv seagull-v2.dylib 2>&1 | head -6
+          codesign -f -s - seagull-v3.dylib
+          codesign -dv seagull-v3.dylib 2>&1 | head -6
 
       - uses: actions/upload-artifact@v4
         with:
-          name: seagull-v2-dylib-arm64
-          path: seagull-v2.dylib
+          name: seagull-v3-dylib-arm64
+          path: seagull-v3.dylib
           if-no-files-found: error
           retention-days: 30
