@@ -44,7 +44,7 @@ def patch_macho(path, load_path):
         if len(head) < 32:
             raise SystemExit("读文件头失败：只拿到 %d 字节（path=%s, size=%d）"
                              % (len(head), path, os.path.getsize(path)))
-        magic, cputype, cpusub, filetype, ncmds, sizeofcmds, flags = struct.unpack("<IiiIIII", head)
+        magic, cputype, cpusub, filetype, ncmds, sizeofcmds, flags = struct.unpack("<IiiIIII", head[:28])
         if magic != MH_MAGIC_64:
             raise SystemExit("不是 MH_MAGIC_64（%08x），这个脚本只处理 arm64 主二进制" % magic)
 
