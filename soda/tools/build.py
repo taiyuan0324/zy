@@ -19,7 +19,7 @@ OUT = os.path.join(ROOT, "gh")
 OWNER = "taiyuan0324"
 REPO = "zy"
 BRANCH = "main"
-VER = "6"   # 改脚本后 +1，破 GitHub raw / CDN 缓存
+VER = "7"   # 改脚本后 +1，破 GitHub raw / CDN 缓存
 SUB = "soda"  # 落在 zy 的 soda/ 子目录
 
 # 关键：Loon 官方手册要求「GitHub 托管的插件/订阅 URL 必须以 http://raw 开头」。
@@ -45,28 +45,37 @@ VARIANTS = {
 
 # 旧语法（Loon <= 3.5.1(982)）
 ROUTES_LEGACY = [
-    (r"^https?:\/\/api\.qishui\.com\/luna\/ads\/config", "汽水-广告总配置"),
-    (r"^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/config", "汽水-激励配置"),
-    (r"^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/retrieve", "汽水-广告素材"),
-    (r"^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done", "汽水-领奖回调"),
-    (r"^https?:\/\/beta-luna\.douyin\.com\/{1,2}luna\/advert\/fallback\/done\/info", "汽水-兜底token"),
+    (r"^https?:\/\/[^\/]+\/luna\/ads\/config", "汽水-广告总配置"),
+    (r"^https?:\/\/[^\/]+\/luna\/advert\/incentive\/config", "汽水-激励配置"),
+    (r"^https?:\/\/[^\/]+\/luna\/advert\/incentive\/retrieve", "汽水-广告素材"),
+    (r"^https?:\/\/[^\/]+\/luna\/advert\/incentive\/done", "汽水-领奖回调"),
+    (r"^https?:\/\/[^\/]+\/{1,2}luna\/advert\/fallback\/done\/info", "汽水-兜底token"),
 ]
 
 # 新语法（Loon >= 3.5.1(983)）：Response Script 强制要求 URL guard
+# host 一律写成 [^/]+ —— API 域名会随版本/HTTPDNS 调度变化
+#   21.1.0: beta-luna.douyin.com + api.qishui.com
+#   21.4.0+: 目击 conf5-lq.qishui.com / log5-lq.qishui.com 这一批
+# 锁死 host 会让插件在新域名下静默不触发，这是 v6 完全没反应的直接原因。
+# 路由只看 path，host 交给 [MITM] 决定谁能被解密。
 ROUTES_V2 = [
-    (r"/^https?:\/\/api\.qishui\.com\/luna\/ads\/config/", "汽水-广告总配置"),
-    (r"/^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/config/", "汽水-激励配置"),
-    (r"/^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/retrieve/", "汽水-广告素材"),
-    (r"/^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/", "汽水-领奖回调"),
-    (r"/^https?:\/\/beta-luna\.douyin\.com\/{1,2}luna\/advert\/fallback\/done\/info/", "汽水-兜底token"),
+    (r"/^https?:\/\/[^\/]+\/luna\/ads\/config/", "汽水-广告总配置"),
+    (r"/^https?:\/\/[^\/]+\/luna\/advert\/incentive\/config/", "汽水-激励配置"),
+    (r"/^https?:\/\/[^\/]+\/luna\/advert\/incentive\/retrieve/", "汽水-广告素材"),
+    (r"/^https?:\/\/[^\/]+\/luna\/advert\/incentive\/done/", "汽水-领奖回调"),
+    (r"/^https?:\/\/[^\/]+\/{1,2}luna\/advert\/fallback\/done\/info/", "汽水-兜底token"),
 ]
-REPLAY_V2 = r"/^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/"
+REPLAY_V2 = r"/^https?:\/\/[^\/]+\/luna\/advert\/incentive\/done/"
 # 哨兵：极宽 URL 匹配，用来判定「Loon 有没有执行插件脚本」这条链路
 SENTINEL_V2 = r"/(qishui|luna|douyin|bytedance|snssdk|bytegecko)/i"
 SENTINEL_MITM = ("*.qishui.com, *.douyin.com, *.douyinpic.com, *.snssdk.com, "
                  "*.bytedance.net, *.bytegecko.com, api.qishui.com, "
                  "beta-luna.douyin.com, conf.qishui.com")
-# 诊断期扩大解密面，防 App 换域名 / 用 CDN 域名
+# MITM 只放已验证不掐死 App 的两个主机（21.1.0 实测 81 个请求全部解密成功）
+MITM_MAIN = "api.qishui.com, beta-luna.douyin.com"
+# 新版疑似的 HTTPDNS 调度域名；单独出一份插件给用户对照测试，不混进主插件
+MITM_LQ = MITM_MAIN + ", *.qishui.com"
+# 诊断用：全量放开（只看主机，不加载脚本），仅 force-tcp / sentinel 这类探针使用
 MITM_ALL = SENTINEL_MITM
 
 
@@ -269,9 +278,12 @@ def render_diagnostic_general():
     ])
 
 
-def render_plugin_v2(base, js_rel, name, desc, mitm_section="[MITM]"):
+def render_plugin_v2(base, js_rel, name, desc, mitm_section="[MITM]", mitm_hosts=None):
     """新语法：response if ${url} ~= /.../ then script(...) with ...
-    mitm_section 可切 [Mitm]（官方 3.5.1+ Plugin 示例写法），排除段名大小写导致解密段被忽略。"""
+    mitm_section 可切 [Mitm]（官方 3.5.1+ Plugin 示例写法），排除段名大小写导致解密段被忽略。
+    mitm_hosts 不传则用 MITM_MAIN。"""
+    if mitm_hosts is None:
+        mitm_hosts = MITM_MAIN
     path = (base + "/" + js_rel + "?v=" + VER) if base else js_rel
     lines = meta(name, desc, "3.5.1(983)") + ["[Script]"]
     for regex, tag in ROUTES_V2:
@@ -284,7 +296,7 @@ def render_plugin_v2(base, js_rel, name, desc, mitm_section="[MITM]"):
         'request if ${url} ~= %s then script("%s") with tag="汽水-领奖请求观测", timeout=30, requires_body=true, enable=true'
         % (REPLAY_V2, path)
     )
-    lines += ["", mitm_section, "hostname = api.qishui.com, beta-luna.douyin.com", ""]
+    lines += ["", mitm_section, "hostname = " + mitm_hosts, ""]
     return "\n".join(lines)
 
 
@@ -393,6 +405,13 @@ def main():
           render_plugin_v2(BASES["raw"], "scripts/soda.js",
                            "汽水音乐 · 激励广告配置改写",
                            "订阅脚本入口用；内容与 soda-noads.plugin 一致（新语法）"))
+    # 变体：MITM 额外吃下 *.qishui.com（含 HTTPDNS 下发的 conf5-lq/log5-lq）
+    # 只在主插件抓不到 /luna/advert 时用来判定「新版接口是不是搬到 -lq 域名了」
+    write("soda-noads-lq.plugin",
+          render_plugin_v2(BASES["raw"], "scripts/soda.js",
+                           "汽水音乐 · 激励广告改写（+*.qishui.com 解密）",
+                           "同主插件，但 MITM 额外放开 *.qishui.com；用于抓 HTTPDNS 调度后的 API 域名",
+                           mitm_hosts=MITM_LQ))
     # 段名变体：官方 3.5.1+ Plugin 示例用 [Mitm]，旧社区插件用 [MITM]，两个都给
     write("soda-noads-mitm.plugin",
           render_plugin_v2(BASES["raw"], "scripts/soda.js",

@@ -6,12 +6,12 @@
 #!loon_version=3.5.1(983)
 
 [Script]
-response if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/ads\/config/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=6") with tag="汽水-广告总配置", timeout=30, requires_body=true, enable=true
-response if ${url} ~= /^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/config/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=6") with tag="汽水-激励配置", timeout=30, requires_body=true, enable=true
-response if ${url} ~= /^https?:\/\/beta-luna\.douyin\.com\/luna\/advert\/incentive\/retrieve/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=6") with tag="汽水-广告素材", timeout=30, requires_body=true, enable=true
-response if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=6") with tag="汽水-领奖回调", timeout=30, requires_body=true, enable=true
-response if ${url} ~= /^https?:\/\/beta-luna\.douyin\.com\/{1,2}luna\/advert\/fallback\/done\/info/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=6") with tag="汽水-兜底token", timeout=30, requires_body=true, enable=true
-request if ${url} ~= /^https?:\/\/api\.qishui\.com\/luna\/advert\/incentive\/done/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=6") with tag="汽水-领奖请求观测", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /^https?:\/\/[^\/]+\/luna\/ads\/config/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=7") with tag="汽水-广告总配置", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /^https?:\/\/[^\/]+\/luna\/advert\/incentive\/config/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=7") with tag="汽水-激励配置", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /^https?:\/\/[^\/]+\/luna\/advert\/incentive\/retrieve/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=7") with tag="汽水-广告素材", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /^https?:\/\/[^\/]+\/luna\/advert\/incentive\/done/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=7") with tag="汽水-领奖回调", timeout=30, requires_body=true, enable=true
+response if ${url} ~= /^https?:\/\/[^\/]+\/{1,2}luna\/advert\/fallback\/done\/info/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=7") with tag="汽水-兜底token", timeout=30, requires_body=true, enable=true
+request if ${url} ~= /^https?:\/\/[^\/]+\/luna\/advert\/incentive\/done/ then script("https://raw.githubusercontent.com/taiyuan0324/zy/main/soda/variants/soda-original.js?v=7") with tag="汽水-领奖请求观测", timeout=30, requires_body=true, enable=true
 
 [MITM]
 hostname = api.qishui.com, beta-luna.douyin.com
