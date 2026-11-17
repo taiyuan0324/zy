@@ -113,6 +113,22 @@ def render_probe_http():
     return "\n".join(lines)
 
 
+def render_probe5():
+    """探针 v5：MITM 全量放开（不拒绝、不改写、不加载脚本），只为了找出汽水现在到底
+    把 /luna/advert 这套接口放在哪台主机上，以及哪台能解密。"""
+    lines = meta("汽水 · 探针 v5（全量 MITM 抓主机·测完删）",
+                 "不拒绝不改写，只把汽水/字节系域名全部纳入解密，用请求记录看哪台主机能解出明文路径")
+    lines += [
+        "[Rule]",
+        "DOMAIN,www.qq.com,REJECT",
+        "",
+        "[MITM]",
+        "hostname = *.qishui.com, *-lq.qishui.com, qishui.com, *.douyin.com, *.douyinpic.com, *.snssdk.com, *.bytegecko.com, *.bytedance.net, *.bytedance.com, *.zijieapi.com, *.pstatp.com, *.amemv.com",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_probe4():
     """探针 v4：只查两件事，不做任何拒绝/改写。
     A) MITM 在本机到底通不通 —— 用 www.baidu.com 当对照（能解密就会显示明文路径）
@@ -361,6 +377,7 @@ def main():
     write("soda-probe3.plugin", render_probe3())
     write("soda-probe3-safe.plugin", render_probe3(safe=True))
     write("soda-probe4.plugin", render_probe4())
+    write("soda-probe5.plugin", render_probe5())
     write("soda-force-tcp.plugin", render_force_tcp())
     write("soda-diagnostic-general.txt", render_diagnostic_general())
 
@@ -395,6 +412,7 @@ def main():
     write("local/soda-probe3.plugin", render_probe3())
     write("local/soda-probe3-safe.plugin", render_probe3(safe=True))
     write("local/soda-probe4.plugin", render_probe4())
+    write("local/soda-probe5.plugin", render_probe5())
     write("local/soda-force-tcp.plugin", render_force_tcp())
     write("local/soda-noads-mitm.plugin",
           render_plugin_v2("", "scripts/soda.js", "汽水音乐 · 免广告领时长（离线·[Mitm]）",

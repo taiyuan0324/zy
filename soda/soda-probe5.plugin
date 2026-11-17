@@ -1,0 +1,11 @@
+#!name=汽水 · 探针 v5（全量 MITM 抓主机·测完删）
+#!desc=不拒绝不改写，只把汽水/字节系域名全部纳入解密，用请求记录看哪台主机能解出明文路径
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Rule]
+DOMAIN,www.qq.com,REJECT
+
+[MITM]
+hostname = *.qishui.com, *-lq.qishui.com, qishui.com, *.douyin.com, *.douyinpic.com, *.snssdk.com, *.bytegecko.com, *.bytedance.net, *.bytedance.com, *.zijieapi.com, *.pstatp.com, *.amemv.com
