@@ -1,0 +1,11 @@
+#!name=汽水 · 探针 v7（只测旧接口域名·测完删）
+#!desc=MITM 只包含 api.qishui.com 与 beta-luna.douyin.com，避开 *-lq 上报域名
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Rule]
+DOMAIN,www.qq.com,REJECT
+
+[MITM]
+hostname = api.qishui.com, beta-luna.douyin.com

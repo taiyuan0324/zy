@@ -113,6 +113,22 @@ def render_probe_http():
     return "\n".join(lines)
 
 
+def render_probe7():
+    """探针 v7：只勾 10 月那两个旧接口域名做 MITM，最小化、不碰 *-lq 上报域名。
+    能解出明文 = 旧接口还在用且未固定证书；解不开 = 同样被钉死。"""
+    lines = meta("汽水 · 探针 v7（只测旧接口域名·测完删）",
+                 "MITM 只包含 api.qishui.com 与 beta-luna.douyin.com，避开 *-lq 上报域名")
+    lines += [
+        "[Rule]",
+        "DOMAIN,www.qq.com,REJECT",
+        "",
+        "[MITM]",
+        "hostname = api.qishui.com, beta-luna.douyin.com",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_probe6():
     """探针 v6：完全不开 MITM，只看连接层面 —— 哪台主机在真正收发数据。
     用于排除「我们自己的 MITM 把 App 连接打断」这个干扰项。"""
@@ -394,6 +410,7 @@ def main():
     write("soda-probe4.plugin", render_probe4())
     write("soda-probe5.plugin", render_probe5())
     write("soda-probe6.plugin", render_probe6())
+    write("soda-probe7.plugin", render_probe7())
     write("soda-force-tcp.plugin", render_force_tcp())
     write("soda-diagnostic-general.txt", render_diagnostic_general())
 
@@ -430,6 +447,7 @@ def main():
     write("local/soda-probe4.plugin", render_probe4())
     write("local/soda-probe5.plugin", render_probe5())
     write("local/soda-probe6.plugin", render_probe6())
+    write("local/soda-probe7.plugin", render_probe7())
     write("local/soda-force-tcp.plugin", render_force_tcp())
     write("local/soda-noads-mitm.plugin",
           render_plugin_v2("", "scripts/soda.js", "汽水音乐 · 免广告领时长（离线·[Mitm]）",
