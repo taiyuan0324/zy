@@ -1,0 +1,17 @@
+#!name=汽水 · 探针 v8（掐 api3-* 逼 fallback·测完删）
+#!desc=REJECT api3-lf/hl/lq.qishui.com；不开它们的 MITM。看广告还能不能出、主插件能否生效
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Rule]
+# 对照组
+DOMAIN,www.qq.com,REJECT
+# 新版 API 三台（MITM 里绝不能出现它们）
+DOMAIN,api3-lf.qishui.com,REJECT
+DOMAIN,api3-hl.qishui.com,REJECT
+DOMAIN,api3-lq.qishui.com,REJECT
+
+[MITM]
+# 只放 21.1.0 时代验证过能解密的两台
+hostname = api.qishui.com, beta-luna.douyin.com

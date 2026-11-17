@@ -122,6 +122,30 @@ def render_probe_http():
     return "\n".join(lines)
 
 
+def render_probe8():
+    """探针 v8：把新版 API 主机 api3-{lf,hl,lq}.qishui.com 直接 REJECT，
+    逼 App 走 fallback。若 fallback 到 beta-luna.douyin.com，主插件立刻能用；
+    若 App 直接报错不给广告，说明没有 fallback，新版这条路彻底死。
+    刻意不开这三个域名的 MITM —— 它们握手 0ms 就断，开了只会把连接掐死。"""
+    lines = meta("汽水 · 探针 v8（掐 api3-* 逼 fallback·测完删）",
+                 "REJECT api3-lf/hl/lq.qishui.com；不开它们的 MITM。看广告还能不能出、主插件能否生效")
+    lines += [
+        "[Rule]",
+        "# 对照组",
+        "DOMAIN,www.qq.com,REJECT",
+        "# 新版 API 三台（MITM 里绝不能出现它们）",
+        "DOMAIN,api3-lf.qishui.com,REJECT",
+        "DOMAIN,api3-hl.qishui.com,REJECT",
+        "DOMAIN,api3-lq.qishui.com,REJECT",
+        "",
+        "[MITM]",
+        "# 只放 21.1.0 时代验证过能解密的两台",
+        "hostname = api.qishui.com, beta-luna.douyin.com",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_probe7():
     """探针 v7：只勾 10 月那两个旧接口域名做 MITM，最小化、不碰 *-lq 上报域名。
     能解出明文 = 旧接口还在用且未固定证书；解不开 = 同样被钉死。"""
@@ -430,6 +454,7 @@ def main():
     write("soda-probe5.plugin", render_probe5())
     write("soda-probe6.plugin", render_probe6())
     write("soda-probe7.plugin", render_probe7())
+    write("soda-probe8.plugin", render_probe8())
     write("soda-force-tcp.plugin", render_force_tcp())
     write("soda-diagnostic-general.txt", render_diagnostic_general())
 
