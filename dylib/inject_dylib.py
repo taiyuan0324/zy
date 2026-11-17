@@ -9,8 +9,12 @@
   追加一条 LC_LOAD_DYLIB 就够了，一个字节都不用挪。
 
 用法：
-  python inject_dylib.py --ipa 汽水音乐_21.7.0.ipa --dylib seagull.dylib \
-                         --out 汽水音乐_patched.ipa [--load-path @executable_path/seagull.dylib]
+  python inject_dylib.py --ipa 汽水音乐_21.7.0.ipa \
+                         --dylib seagull.dylib --dylib libluna.dylib \
+                         --out 汽水音乐_patched.ipa
+
+  --dylib 可重复传，按顺序追加 LC_LOAD_DYLIB（先注入的先执行 constructor）。
+  默认 load path = @executable_path/<文件名>；要自定义就按同样顺序重复 --load-path。
 
 注入后再用 zsign 重签：
   zsign -k cert.p12 -p 密码 -m app.mobileprovision -o final.ipa -z 9 汽水音乐_patched.ipa
@@ -113,13 +117,20 @@ def patch_macho(path, load_path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ipa", required=True)
-    ap.add_argument("--dylib", required=True)
+    ap.add_argument("--dylib", action="append", required=True,
+                    help="dylib 路径，可重复传多个，按顺序注入")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--load-path", default=None, help="默认 @executable_path/<dylib 文件名>")
+    ap.add_argument("--load-path", action="append", default=None,
+                    help="与 --dylib 一一对应的自定义 load path（可选）")
+    ap.add_argument("--name", action="append", default=None,
+                    help="与 --dylib 一一对应的包内文件名（可选，默认取源文件名）")
     args = ap.parse_args()
 
-    dylib_name = os.path.basename(args.dylib)
-    load_path = args.load_path or ("@executable_path/" + dylib_name)
+    dylibs = args.dylib
+    if args.load_path and len(args.load_path) != len(dylibs):
+        raise SystemExit("--load-path 数量(%d)必须和 --dylib 数量(%d)一致" % (len(args.load_path), len(dylibs)))
+    if args.name and len(args.name) != len(dylibs):
+        raise SystemExit("--name 数量(%d)必须和 --dylib 数量(%d)一致" % (len(args.name), len(dylibs)))
 
     work = tempfile.mkdtemp(prefix="inject_")
     try:
@@ -139,11 +150,15 @@ def main():
         if not os.path.isfile(bin_path):
             raise SystemExit("找不到主二进制")
 
-        dst = os.path.join(app, dylib_name)
-        shutil.copy2(args.dylib, dst)
-        print("[+] 复制 dylib ->", dst)
-
-        patch_macho(bin_path, load_path)
+        for i, dylib in enumerate(dylibs):
+            if not os.path.isfile(dylib):
+                raise SystemExit("dylib 不存在: %s" % dylib)
+            name = args.name[i] if args.name else os.path.basename(dylib)
+            load_path = args.load_path[i] if args.load_path else ("@executable_path/" + name)
+            dst = os.path.join(app, name)
+            shutil.copy2(dylib, dst)
+            print("[+] [%d/%d] 复制 %s -> %s" % (i + 1, len(dylibs), os.path.basename(dylib), name))
+            patch_macho(bin_path, load_path)
 
         out_abs = os.path.abspath(args.out)
         print("[*] 重新打包 ->", out_abs)
