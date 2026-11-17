@@ -1,0 +1,10 @@
+#!name=汽水 · 探针 v6（零 MITM·只看主机与流量）
+#!desc=不解密任何流量；点一次领奖后看哪台 qishui/douyin 主机有真实上下行字节
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Rule]
+# 唯一对照组，确认引擎活着
+DOMAIN,www.qq.com,REJECT
+# 不用 MITM 段：让所有 HTTPS 原样走隧道，只记录主机名和字节数

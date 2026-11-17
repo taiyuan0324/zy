@@ -113,6 +113,21 @@ def render_probe_http():
     return "\n".join(lines)
 
 
+def render_probe6():
+    """探针 v6：完全不开 MITM，只看连接层面 —— 哪台主机在真正收发数据。
+    用于排除「我们自己的 MITM 把 App 连接打断」这个干扰项。"""
+    lines = meta("汽水 · 探针 v6（零 MITM·只看主机与流量）",
+                 "不解密任何流量；点一次领奖后看哪台 qishui/douyin 主机有真实上下行字节")
+    lines += [
+        "[Rule]",
+        "# 唯一对照组，确认引擎活着",
+        "DOMAIN,www.qq.com,REJECT",
+        "# 不用 MITM 段：让所有 HTTPS 原样走隧道，只记录主机名和字节数",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_probe5():
     """探针 v5：MITM 全量放开（不拒绝、不改写、不加载脚本），只为了找出汽水现在到底
     把 /luna/advert 这套接口放在哪台主机上，以及哪台能解密。"""
@@ -378,6 +393,7 @@ def main():
     write("soda-probe3-safe.plugin", render_probe3(safe=True))
     write("soda-probe4.plugin", render_probe4())
     write("soda-probe5.plugin", render_probe5())
+    write("soda-probe6.plugin", render_probe6())
     write("soda-force-tcp.plugin", render_force_tcp())
     write("soda-diagnostic-general.txt", render_diagnostic_general())
 
@@ -413,6 +429,7 @@ def main():
     write("local/soda-probe3-safe.plugin", render_probe3(safe=True))
     write("local/soda-probe4.plugin", render_probe4())
     write("local/soda-probe5.plugin", render_probe5())
+    write("local/soda-probe6.plugin", render_probe6())
     write("local/soda-force-tcp.plugin", render_force_tcp())
     write("local/soda-noads-mitm.plugin",
           render_plugin_v2("", "scripts/soda.js", "汽水音乐 · 免广告领时长（离线·[Mitm]）",
