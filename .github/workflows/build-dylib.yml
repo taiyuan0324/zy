@@ -19,7 +19,7 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-path
           clang --version | head -2
 
-      - name: Compile arm64 dylib
+      - name: Compile arm64 dylib (v4)
         run: |
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
           clang -arch arm64 \
@@ -30,37 +30,42 @@ jobs:
                 -miphoneos-version-min=15.0 \
                 -framework Foundation \
                 -framework UIKit \
-                -o seagull-v3.dylib dylib/seagull.m
-          ls -la seagull-v3.dylib
-          file seagull-v3.dylib
-          otool -hv seagull-v3.dylib
-          echo "--- exported symbols ---"
-          nm -gU seagull-v3.dylib | head -10
+                -o seagull-v4.dylib dylib/seagull.m
+          ls -la seagull-v4.dylib
+          file seagull-v4.dylib
+          otool -hv seagull-v4.dylib
 
-      - name: Assert - no network / no rootVC hook (v1 事故防回归)
+      - name: Assert - zero network intrusion (v1 事故防回归)
         run: |
-          echo "检查 v3 是否残留会卡启动的 hook 字符串："
+          echo "检查产物里是否残留会卡启动/断网的 hook 符号："
           for bad in "dataTaskWithRequest" "setRootViewController" "NSURLSession"; do
-            if strings seagull-v3.dylib | grep -q "$bad"; then
-              echo "::error::残留危险字符串 $bad —— v1 事故会复现"; exit 1
+            if strings seagull-v4.dylib | grep -q "$bad"; then
+              echo "::error::残留危险符号 $bad —— v1 事故会复现"; exit 1
             fi
             echo "  [OK] 无 $bad"
           done
-          echo "检查弹窗拦截仍在："
-          strings seagull-v3.dylib | grep -q "AntiCheatViewController" && echo "  [OK] AntiCheatViewController 拦截在" || { echo "::error::拦截逻辑丢了"; exit 1; }
-          echo "检查判定源 hook 点齐全："
+
+      - name: Assert - v4 功能点齐全
+        run: |
+          echo "检查反作弊 UI 拦截仍在："
+          strings seagull-v4.dylib | grep -q "AntiCheatViewController" && echo "  [OK] AntiCheatViewController" || { echo "::error::拦截逻辑丢了"; exit 1; }
+          echo "检查判定源 hook 点："
           for good in "isAppStoreChannel" "isJailBroken" "isInjected" "checkSignAuthIfNeed" "isSwitchOn" "makeKeyAndVisible"; do
-            strings seagull-v3.dylib | grep -q "$good" && echo "  [OK] $good" || { echo "::error::缺少 hook 点 $good"; exit 1; }
+            strings seagull-v4.dylib | grep -q "$good" && echo "  [OK] $good" || { echo "::error::缺少 hook 点 $good"; exit 1; }
+          done
+          echo "检查 v4 渠道凭证伪装 + 可见诊断："
+          for good in "appStoreReceiptURL" "embedded.mobileprovision" "sandboxReceipt" "seagull_diag.txt" "scan finished" "SG v4" "REAL embedded.mobileprovision"; do
+            strings seagull-v4.dylib | grep -q "$good" && echo "  [OK] $good" || { echo "::error::缺少 v4 功能点 $good"; exit 1; }
           done
 
       - name: Ad-hoc sign
         run: |
-          codesign -f -s - seagull-v3.dylib
-          codesign -dv seagull-v3.dylib 2>&1 | head -6
+          codesign -f -s - seagull-v4.dylib
+          codesign -dv seagull-v4.dylib 2>&1 | head -6
 
       - uses: actions/upload-artifact@v4
         with:
-          name: seagull-v3-dylib-arm64
-          path: seagull-v3.dylib
+          name: seagull-v4-dylib-arm64
+          path: seagull-v4.dylib
           if-no-files-found: error
           retention-days: 30
