@@ -1,0 +1,19 @@
+#!name=汽水 · 链路探针 v3-safe（无AND规则·测完删）
+#!desc=不改主配置：插件内直接 REJECT UDP443 逼 App 回落 TCP；后缀匹配暴露 App 真实域名
+#!author=海鸥
+#!system=ios
+#!homepage=https://github.com/taiyuan0324/zy
+
+[Rule]
+# B. 对照组：开着浏览器打不开 www.qq.com，说明规则引擎/插件加载都活着
+DOMAIN,www.qq.com,REJECT
+# C. 汽水侧：精确 + 后缀，命中就会在「最近请求」里留下真实 hostname
+DOMAIN,beta-luna.douyin.com,REJECT
+DOMAIN-SUFFIX,snssdk.com,REJECT
+DOMAIN-SUFFIX,bytegecko.com,REJECT
+DOMAIN-SUFFIX,douyinpic.com,REJECT
+DOMAIN-SUFFIX,bytedance.net,REJECT
+
+# D. 这一组不解密不拒绝，只开 MITM：如果流量真进来了，会在「最近请求」显示明文 :path
+[MITM]
+hostname = *.qishui.com, api.qishui.com, conf.qishui.com

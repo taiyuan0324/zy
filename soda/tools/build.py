@@ -113,6 +113,37 @@ def render_probe_http():
     return "\n".join(lines)
 
 
+def render_probe3(safe=False):
+    """探针 v3：插件内直接掐 QUIC + 大范围后缀匹配，不用改主配置 [General]。
+    safe=True 时去掉 AND 复合规则（老版本可能不认），只留域名规则。"""
+    name = "汽水 · 链路探针 v3（掐QUIC+后缀匹配·测完删）" if not safe else \
+           "汽水 · 链路探针 v3-safe（无AND规则·测完删）"
+    desc = "不改主配置：插件内直接 REJECT UDP443 逼 App 回落 TCP；后缀匹配暴露 App 真实域名"
+    lines = meta(name, desc)
+    lines += ["[Rule]"]
+    if not safe:
+        lines += [
+            "# A. 掐 QUIC(UDP 443)，等价 disable-udp-ports=443，但写成规则不用动主配置",
+            "AND,((PROTOCOL,UDP),(DEST-PORT,443)),REJECT",
+        ]
+    lines += [
+        "# B. 对照组：开着浏览器打不开 www.qq.com，说明规则引擎/插件加载都活着",
+        "DOMAIN,www.qq.com,REJECT",
+        "# C. 汽水侧：精确 + 后缀，命中就会在「最近请求」里留下真实 hostname",
+        "DOMAIN,beta-luna.douyin.com,REJECT",
+        "DOMAIN-SUFFIX,snssdk.com,REJECT",
+        "DOMAIN-SUFFIX,bytegecko.com,REJECT",
+        "DOMAIN-SUFFIX,douyinpic.com,REJECT",
+        "DOMAIN-SUFFIX,bytedance.net,REJECT",
+        "",
+        "# D. 这一组不解密不拒绝，只开 MITM：如果流量真进来了，会在「最近请求」显示明文 :path",
+        "[MITM]",
+        "hostname = *.qishui.com, api.qishui.com, conf.qishui.com",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_probe_http2():
     """国内可达的 HTTP 引擎探针：neverssl.com 在国内本身可能不通，会误判成 REJECT 生效。
     换成本土一定可达的 HTTP 域名 + neverssl 对照，双证据。"""
@@ -307,6 +338,8 @@ def main():
     write("soda-probe-jsdelivr.plugin", render_probe_plugin())
     write("soda-probe-http.plugin", render_probe_http())
     write("soda-probe-http2.plugin", render_probe_http2())
+    write("soda-probe3.plugin", render_probe3())
+    write("soda-probe3-safe.plugin", render_probe3(safe=True))
     write("soda-force-tcp.plugin", render_force_tcp())
     write("soda-diagnostic-general.txt", render_diagnostic_general())
 
@@ -338,6 +371,8 @@ def main():
     write("local/soda-probe.plugin", render_probe_plugin())
     write("local/soda-probe-http.plugin", render_probe_http())
     write("local/soda-probe-http2.plugin", render_probe_http2())
+    write("local/soda-probe3.plugin", render_probe3())
+    write("local/soda-probe3-safe.plugin", render_probe3(safe=True))
     write("local/soda-force-tcp.plugin", render_force_tcp())
     write("local/soda-noads-mitm.plugin",
           render_plugin_v2("", "scripts/soda.js", "汽水音乐 · 免广告领时长（离线·[Mitm]）",
