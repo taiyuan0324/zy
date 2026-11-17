@@ -30,21 +30,33 @@ jobs:
                 -miphoneos-version-min=15.0 \
                 -framework Foundation \
                 -framework UIKit \
-                -o seagull.dylib dylib/seagull.m
-          ls -la seagull.dylib
-          file seagull.dylib
-          otool -hv seagull.dylib
+                -o seagull-v2.dylib dylib/seagull.m
+          ls -la seagull-v2.dylib
+          file seagull-v2.dylib
+          otool -hv seagull-v2.dylib
           echo "--- exported symbols ---"
-          nm -gU seagull.dylib | head -10
+          nm -gU seagull-v2.dylib | head -10
+
+      - name: Assert - no network / no rootVC hook (v1 事故防回归)
+        run: |
+          echo "检查 v2 是否残留会卡启动的 hook 字符串："
+          for bad in "dataTaskWithRequest" "setRootViewController" "NSURLSession"; do
+            if strings seagull-v2.dylib | grep -q "$bad"; then
+              echo "::error::残留危险字符串 $bad —— v1 事故会复现"; exit 1
+            fi
+            echo "  [OK] 无 $bad"
+          done
+          echo "检查是否仍有弹窗拦截："
+          strings seagull-v2.dylib | grep -q "AntiCheatViewController" && echo "  [OK] AntiCheatViewController 拦截在" || { echo "::error::拦截逻辑丢了"; exit 1; }
 
       - name: Ad-hoc sign
         run: |
-          codesign -f -s - seagull.dylib
-          codesign -dv seagull.dylib 2>&1 | head -6
+          codesign -f -s - seagull-v2.dylib
+          codesign -dv seagull-v2.dylib 2>&1 | head -6
 
       - uses: actions/upload-artifact@v4
         with:
-          name: seagull-dylib-arm64
-          path: seagull.dylib
+          name: seagull-v2-dylib-arm64
+          path: seagull-v2.dylib
           if-no-files-found: error
           retention-days: 30
