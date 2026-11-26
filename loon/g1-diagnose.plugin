@@ -1,0 +1,15 @@
+#!name = G1 ACQ 诊断 (Loon)
+#!desc = 抓取 Google One 响应里的 SKU token 打到脚本日志，不改写任何内容。仅诊断用。装前先停用其他 G1 ACQ 插件，避免两条 response 脚本抢同一响应。需开启 HTTPS 解密并信任证书，hostname 含 one.google.com。重开 Google One 方案页后看脚本日志中 [g1-diag] 行。
+#!author = Loon 适配诊断
+#!homepage = https://github.com/crhywun/g1-acq
+#!system = iOS,iPadOS,tvOS,macOS
+#!tag = Google One,SKU,诊断
+
+[Rule]
+PROTOCOL,QUIC,REJECT
+
+[Script]
+http-response ^https:\/\/one\.google\.com\/ script-path=https://raw.githubusercontent.com/taiyuan0324/zy/main/loon/g1-diagnose.js, requires-body=true, timeout=30, tag=G1 诊断, enable=true
+
+[Mitm]
+hostname = one.google.com
