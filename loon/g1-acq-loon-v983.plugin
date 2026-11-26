@@ -1,0 +1,17 @@
+#!name = G1 ACQ SKU 管理 (Loon · 新语法)
+#!desc = Google One iOS 订阅 SKU 采集与本地改写，适配 Loon 3.5.1 (983)+ 新版 Script 语法。默认 discount75：2TB/Pro 12个月90p、20TB/30TB 三个月75p；内置本机管理页可应用 1元Pro 等预制模板。需开启 HTTPS 解密并信任证书，hostname 须包含 one.google.com。只启用一个改写入口，切换后重新连接并打开方案页。管理页：https://one.google.com/g1-sku-report
+#!author = crhywun（原仓库），Loon 适配
+#!homepage = https://github.com/crhywun/g1-acq
+#!system = iOS,iPadOS,tvOS,macOS
+#!tag = Google One,SKU,订阅,改价
+
+[Rule]
+# 拦截 UDP 443，促使 HTTP/3 回退到 TCP，便于 MitM 解密
+AND,((PROTOCOL,UDP),(DEST-PORT,443)),REJECT-DROP
+
+[Script]
+response if ${url} ~= /^https:\/\/one\.google\.com\// then script("https://cdn.jsdelivr.net/gh/crhywun/g1-acq@v7.11.0/g1-acq-discount.js") with tag="G1 ACQ 采集与改写", requires_body=true, timeout=30, enable=true
+request if ${url} ~= /^https:\/\/one\.google\.com\/g1-sku-report\/?(?:\?.*)?$/ then script("https://cdn.jsdelivr.net/gh/crhywun/g1-acq@v7.11.0/g1-sku-report-discount.js") with tag="G1 SKU 管理页", requires_body=true, timeout=30, enable=true
+
+[Mitm]
+hostname = one.google.com
