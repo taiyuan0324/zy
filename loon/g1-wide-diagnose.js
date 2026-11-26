@@ -5,13 +5,12 @@
   var method = typeof req.method === "string" ? req.method : "REQ";
   var tag = "[g1-wide] ";
   if (!url) { $done({}); return; }
-  var lower = url.toLowerCase();
-  // 只记录可能与 Google One 方案/订阅/价格相关的请求
-  if (!/(sku|offer|plan|billing|subscribe|price|iap|gemini|one\.google|batchexecute|payments|checkout|acq)/.test(lower)) {
-    $done({});
-    return;
+  console.log(tag + method + " " + url.slice(0, 500));
+  var rb = req.body;
+  if (typeof rb === "string" && rb.length) {
+    console.log(tag + "reqBody(" + rb.length + ") " + rb.slice(0, 1200).replace(/\s+/g, " "));
+  } else if (rb && typeof rb === "object") {
+    console.log(tag + "reqBodyObj " + JSON.stringify(rb).slice(0, 1200));
   }
-  var resp = typeof $response === "object" && $response ? $response : {};
-  console.log(tag + method + " " + url.slice(0, 400) + " status=" + (resp.status || "?"));
   $done({});
 })();
