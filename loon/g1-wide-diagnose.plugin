@@ -1,9 +1,9 @@
 #!name = G1 宽域诊断 (Loon)
-#!desc = 记录 Google 全系域名中与方案/订阅/价格相关的请求 URL，定位 Google One App 实际走哪个接口。仅诊断，不改写、不需要 body。装前停用其他 G1 插件。重开 Google One 方案页后看脚本日志中 [g1-wide] 行。
+#!desc = 记录 Google 全系域名的请求 URL 和请求体,定位 Google One 方案页实际接口。仅诊断,不改写。装前停用其他 G1 插件。重开 Google One 方案页后看脚本日志中 [g1-wide] 行。
 #!author = Loon 适配诊断
 #!homepage = https://github.com/crhywun/g1-acq
 #!system = iOS,iPadOS,tvOS,macOS
 #!tag = Google One,SKU,诊断
 
 [Script]
-http-request ^https:\/\/(?:[a-z0-9-]+\.)?(?:google\.com|googleapis\.com|gstatic\.com|apple\.com)\/ script-path=https://raw.githubusercontent.com/taiyuan0324/zy/main/loon/g1-wide-diagnose.js, requires-body=false, timeout=10, tag=G1 宽域诊断, enable=true
+http-request ^https:\/\/(?:[a-z0-9-]+\.)?(?:google\.com|googleapis\.com|gstatic\.com|apple\.com)\/ script-path=https://raw.githubusercontent.com/taiyuan0324/zy/main/loon/g1-wide-diagnose.js, requires-body=true, timeout=10, tag=G1 宽域诊断, enable=true
